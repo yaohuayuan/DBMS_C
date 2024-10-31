@@ -21,7 +21,7 @@ add_executable(DBMS_C
         file/FileManager.c
         head/ByteBuffer.c
         test/test.c
-        log/LogIterator.c log/LogIterator.h log/LogManager.c log/LogManager.h buffer/Buffer.c buffer/Buffer.h buffer/BufferManager.c buffer/BufferManager.h head/Error.c head/Error.h record/Schema.c record/Schema.h head/map.c head/map.h record/Layout.c record/Layout.h)
+        log/LogIterator.c log/LogIterator.h log/LogManager.c log/LogManager.h buffer/Buffer.c buffer/Buffer.h buffer/BufferManager.c buffer/BufferManager.h head/Error.c head/Error.h record/Schema.c record/Schema.h head/map.c head/map.h record/Layout.c record/Layout.h record/RID.c record/RID.h)
 
 ## 添加头文件列表，确保 CMake 能找到它们
 #target_include_directories(DBMS_C PUBLIC

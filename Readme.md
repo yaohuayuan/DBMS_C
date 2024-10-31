@@ -11,9 +11,14 @@
 3. FileManager
 ### head(一些数据结构实现)
 1. ByteBuffer
+2. map
 ### log
 1. LogIterator
 2. LogManager
 ### buffer
 1. Buffer
 2. BufferManager
+### record
+1. Layout
+2. RID
+3. Schema

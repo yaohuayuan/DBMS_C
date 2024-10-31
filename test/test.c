@@ -15,7 +15,7 @@ void BlockTest() {
     BlockID_Init(&id1, name, id);
     BlockID_Init(&id2, name, id);
     printf("%s%d\n", getFileName(id1), getBlockId(id1));
-    printf("%s\n", display(id1));
+    printf("%s\n", BlockIDToString(id1));
     printf("%d\n", BlockIdEqual(id1, id2));
 
     BlockID_Init(&id3, name, id + 1);
@@ -319,7 +319,7 @@ void testBufferManager(){
     for(int i=0;i<6;i++){
         Buffer *buffer = pBuffer[i];
         if(buffer!=NULL){
-            printf("%d+%s\n",i,display(buffer->blockId));
+            printf("%d+%s\n",i,BlockIDToString(buffer->blockId));
         }
     }
 }

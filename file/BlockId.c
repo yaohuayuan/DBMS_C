@@ -14,7 +14,7 @@ char * getFileName(BlockID b){
 int getBlockId(BlockID b){
     return b.blockId;
 }
-char* display(BlockID b) {
+char* BlockIDToString(BlockID b) {
     char *str = malloc(256); // 分配足够的内存
     if (str == NULL)
         return NULL; // 检查分配是否成功
