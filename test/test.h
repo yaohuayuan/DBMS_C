@@ -6,6 +6,7 @@
 #define DBMS_C_TEST_H
 #include "../head/AllHead.h"
 #include "time.h"
+#include "Layout.h"
 void BlockTest();
 void testByteBuffer();
 #endif //DBMS_C_TEST_H

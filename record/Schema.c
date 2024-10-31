@@ -118,15 +118,18 @@ void SchemaAdd(Schema *SchemaTo,char* FldName,Schema *SchemaFrom){
 }
 void SchemaAddAll(Schema *SchemaTo,Schema *SchemaFrom){
     FieldNode* fieldNode = SchemaFrom->fields;
-    while(fieldNode->next!=NULL){
+    while(fieldNode!=NULL){
+
         SchemaAdd(SchemaTo,fieldNode->fileName,SchemaFrom);
+        fieldNode = fieldNode->next;
     }
 }
 bool SchemaHasField(Schema *schema,char* FldName){
     FieldNode* fieldNode = schema->fields;
-    while(fieldNode->next!=NULL){
+    while(fieldNode!=NULL){
         if(strcmp(FldName,fieldNode->fileName)==0)
             return true;
+        fieldNode = fieldNode->next;
     }
     return false;
 }

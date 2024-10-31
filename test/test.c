@@ -447,7 +447,18 @@ void test_SchemaAddField() {
     // ÊÍ·Å×ÊÔ´
     SchemaFree(schema);
 }
-
+void LayoutTest(){
+    Schema *schema = SchemaInit();
+    SchemaAddIntField(schema,"A");
+    SchemaAddStringField(schema,"B",9);
+    Layout *layout = LayoutInit(schema,NULL,0);
+    FieldNode *fieldNode = layout->schema->fields;
+    while(fieldNode!=NULL){
+        int offset = LayoutOffset(layout,fieldNode->fileName);
+        printf("%s,%d\n",fieldNode->fileName,offset);
+        fieldNode = fieldNode->next;
+    }
+}
 int main() {
 //    BlockTest();
 //testByteBuffer();
@@ -466,6 +477,7 @@ int main() {
 //    testBuffer();
     //mapTest();
     //testMapStruct();
-    test_SchemaAddField();
+    //test_SchemaAddField();
+    LayoutTest();
     return 0;
 }

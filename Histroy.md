@@ -119,7 +119,7 @@ typedef struct{
     uint8_t* type;
 } ByteBuffer;
 ```
-## 26号
+### 26号
 针对上述问题继续改正,首先加了一个枚举类型进行判断是什么类型,并加一个#define 将int重命名为BYTEBUFFER_STATUS
 ```c
 #define BYTEBUFFER_STATUS int
@@ -494,9 +494,11 @@ FileSet *GetFile(FileManager *fm, const char *fileName) {
 }
 ```
 都加上了b进行读取.至此 Log修改完成! 终于写完了Log 对这几个功能修改更完善,了解更深了
-# 21号
+## 21号
 金工实习结束了 我又来继续更新了
 
 Buffer文件测试没有问题
 
-开始写record文件夹 在此之前要实现Map(head) 这里采用了[GitHub](https://github.com/rxi/map)上面的一个map(哈希版本) 。
+开始写record文件夹 在此之前要实现Map(head) 这里采用了[GitHub](https://github.com/rxi/map)上面的一个map(哈希版本) 
+### 31号
+该项目上传到我的GitHub上面并开始实时更新。

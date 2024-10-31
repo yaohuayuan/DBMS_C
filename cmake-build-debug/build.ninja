@@ -133,6 +133,13 @@ build CMakeFiles/DBMS_C.dir/head/map.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\head
 
+build CMakeFiles/DBMS_C.dir/record/Layout.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/record/Layout.c || cmake_object_order_depends_target_DBMS_C
+  DEP_FILE = CMakeFiles\DBMS_C.dir\record\Layout.c.obj.d
+  FLAGS = -g -fdiagnostics-color=always
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  OBJECT_DIR = CMakeFiles\DBMS_C.dir
+  OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\record
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target DBMS_C
@@ -141,7 +148,7 @@ build CMakeFiles/DBMS_C.dir/head/map.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/
 #############################################
 # Link the executable DBMS_C.exe
 
-build DBMS_C.exe: C_EXECUTABLE_LINKER__DBMS_C_Debug CMakeFiles/DBMS_C.dir/file/BlockId.c.obj CMakeFiles/DBMS_C.dir/file/Page.c.obj CMakeFiles/DBMS_C.dir/file/FileManager.c.obj CMakeFiles/DBMS_C.dir/head/ByteBuffer.c.obj CMakeFiles/DBMS_C.dir/test/test.c.obj CMakeFiles/DBMS_C.dir/log/LogIterator.c.obj CMakeFiles/DBMS_C.dir/log/LogManager.c.obj CMakeFiles/DBMS_C.dir/buffer/Buffer.c.obj CMakeFiles/DBMS_C.dir/buffer/BufferManager.c.obj CMakeFiles/DBMS_C.dir/head/Error.c.obj CMakeFiles/DBMS_C.dir/record/Schema.c.obj CMakeFiles/DBMS_C.dir/head/map.c.obj
+build DBMS_C.exe: C_EXECUTABLE_LINKER__DBMS_C_Debug CMakeFiles/DBMS_C.dir/file/BlockId.c.obj CMakeFiles/DBMS_C.dir/file/Page.c.obj CMakeFiles/DBMS_C.dir/file/FileManager.c.obj CMakeFiles/DBMS_C.dir/head/ByteBuffer.c.obj CMakeFiles/DBMS_C.dir/test/test.c.obj CMakeFiles/DBMS_C.dir/log/LogIterator.c.obj CMakeFiles/DBMS_C.dir/log/LogManager.c.obj CMakeFiles/DBMS_C.dir/buffer/Buffer.c.obj CMakeFiles/DBMS_C.dir/buffer/BufferManager.c.obj CMakeFiles/DBMS_C.dir/head/Error.c.obj CMakeFiles/DBMS_C.dir/record/Schema.c.obj CMakeFiles/DBMS_C.dir/head/map.c.obj CMakeFiles/DBMS_C.dir/record/Layout.c.obj
   FLAGS = -g
   LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
