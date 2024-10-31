@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "map.h"
-
+#include "stdbool.h"
 // 文件信息类型枚举
 typedef enum {
     FILE_INFO_CODE_BIT,
@@ -49,23 +49,15 @@ typedef struct Schema {
     FieldNode *fields;
     map_FileInfo_t *MapFileInfo;
 } Schema;
-
-// 初始化FileInfo
 FileInfo *FileInfoInit(int type, int length);
-
-// 初始化Schema
 Schema *SchemaInit();
-
-// 添加字段到Schema
 void SchemaAddField(Schema *schema, char *FldName, int type, int length);
-
-// 添加整数字段
 void SchemaAddIntField(Schema *schema, char *FldName);
-
-// 添加字符串字段
 void SchemaAddStringField(Schema *schema, char *FldName, int length);
-
-// 释放Schema及其相关资源
 void SchemaFree(Schema *schema);
-
+FileInfoCode SchemaType(Schema* schema,char* FldName);
+int SchemaLength(Schema* schema,char* FldName);
+void SchemaAdd(Schema *SchemaTo,char* FldName,Schema *SchemaFrom);
+void SchemaAddAll(Schema *SchemaTo,Schema *SchemaFrom);
+bool SchemaHasField(Schema *schema,char* FldName);
 #endif //DBMS_C_SCHEMA_H

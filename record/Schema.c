@@ -58,18 +58,18 @@ void SchemaAddField(Schema *schema, char *FldName, int type, int length) {
 
     // 创建新FileInfo并添加到哈希映射
     FileInfo *fileInfo = FileInfoInit(type, length);
-//    if (!fileInfo) {
-//        free(newFieldNode->fileName);
-//        free(newFieldNode);
-//        return;
-//    }
-    map_set(schema->MapFileInfo, newFieldNode->fileName, *fileInfo);
-//    // 使用&fileInfo而不是fileInfo
-//    if (map_set(schema->MapFileInfo, newFieldNode->fileName, fileInfo) != 0) {
-//        free(fileInfo);
-//        free(newFieldNode->fileName);
-//        free(newFieldNode);
-//    }
+    if (!fileInfo) {
+        free(newFieldNode->fileName);
+        free(newFieldNode);
+        return;
+    }
+//    map_set(schema->MapFileInfo, newFieldNode->fileName, *fileInfo);
+    // 使用&fileInfo而不是fileInfo
+    if (map_set(schema->MapFileInfo, newFieldNode->fileName, *fileInfo) != 0) {
+        free(fileInfo);
+        free(newFieldNode->fileName);
+        free(newFieldNode);
+    }
 }
 
 // 添加整数字段
@@ -102,4 +102,31 @@ void SchemaFree(Schema *schema) {
     }
 
     free(schema);
+}
+FileInfoCode SchemaType(Schema* schema,char* FldName){
+    FileInfo *fileInfo= (FileInfo*)map_get(schema->MapFileInfo,FldName);
+    return fileInfo->type;
+}
+int SchemaLength(Schema* schema,char* FldName){
+    FileInfo *fileInfo= (FileInfo*)map_get(schema->MapFileInfo,FldName);
+    return fileInfo->length;
+}
+void SchemaAdd(Schema *SchemaTo,char* FldName,Schema *SchemaFrom){
+    int type = SchemaType(SchemaFrom,FldName);
+    int length = SchemaLength(SchemaFrom,FldName);
+    SchemaAddField(SchemaTo,FldName,type,length);
+}
+void SchemaAddAll(Schema *SchemaTo,Schema *SchemaFrom){
+    FieldNode* fieldNode = SchemaFrom->fields;
+    while(fieldNode->next!=NULL){
+        SchemaAdd(SchemaTo,fieldNode->fileName,SchemaFrom);
+    }
+}
+bool SchemaHasField(Schema *schema,char* FldName){
+    FieldNode* fieldNode = schema->fields;
+    while(fieldNode->next!=NULL){
+        if(strcmp(FldName,fieldNode->fileName)==0)
+            return true;
+    }
+    return false;
 }
