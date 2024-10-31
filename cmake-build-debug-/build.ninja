@@ -52,100 +52,107 @@ build cmake_object_order_depends_target_DBMS_C: phony || CMakeFiles/DBMS_C.dir
 build CMakeFiles/DBMS_C.dir/file/BlockId.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/file/BlockId.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\file\BlockId.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\file
 
 build CMakeFiles/DBMS_C.dir/file/Page.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/file/Page.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\file\Page.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\file
 
 build CMakeFiles/DBMS_C.dir/file/FileManager.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/file/FileManager.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\file\FileManager.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\file
 
 build CMakeFiles/DBMS_C.dir/head/ByteBuffer.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/head/ByteBuffer.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\head\ByteBuffer.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\head
 
 build CMakeFiles/DBMS_C.dir/test/test.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/test/test.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\test\test.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\test
 
 build CMakeFiles/DBMS_C.dir/log/LogIterator.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/log/LogIterator.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\log\LogIterator.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\log
 
 build CMakeFiles/DBMS_C.dir/log/LogManager.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/log/LogManager.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\log\LogManager.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\log
 
 build CMakeFiles/DBMS_C.dir/buffer/Buffer.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/buffer/Buffer.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\buffer\Buffer.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\buffer
 
 build CMakeFiles/DBMS_C.dir/buffer/BufferManager.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/buffer/BufferManager.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\buffer\BufferManager.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\buffer
 
 build CMakeFiles/DBMS_C.dir/head/Error.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/head/Error.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\head\Error.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\head
 
 build CMakeFiles/DBMS_C.dir/record/Schema.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/record/Schema.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\record\Schema.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\record
 
 build CMakeFiles/DBMS_C.dir/head/map.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/head/map.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\head\map.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\head
 
 build CMakeFiles/DBMS_C.dir/record/Layout.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/record/Layout.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\record\Layout.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\record
 
 build CMakeFiles/DBMS_C.dir/record/RID.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/record/RID.c || cmake_object_order_depends_target_DBMS_C
   DEP_FILE = CMakeFiles\DBMS_C.dir\record\RID.c.obj.d
   FLAGS = --coverage -g -fdiagnostics-color=always
-  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
   OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\record
+
+build CMakeFiles/DBMS_C.dir/tx/BufferList.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBMS/DBMS_C/tx/BufferList.c || cmake_object_order_depends_target_DBMS_C
+  DEP_FILE = CMakeFiles\DBMS_C.dir\tx\BufferList.c.obj.d
+  FLAGS = --coverage -g -fdiagnostics-color=always
+  INCLUDES = -ID:/1/DBMS/DBMS_C/file -ID:/1/DBMS/DBMS_C/head -ID:/1/DBMS/DBMS_C/test -ID:/1/DBMS/DBMS_C/log -ID:/1/DBMS/DBMS_C/buffer -ID:/1/DBMS/DBMS_C/record -ID:/1/DBMS/DBMS_C/tx
+  OBJECT_DIR = CMakeFiles\DBMS_C.dir
+  OBJECT_FILE_DIR = CMakeFiles\DBMS_C.dir\tx
 
 
 # =============================================================================
@@ -155,7 +162,7 @@ build CMakeFiles/DBMS_C.dir/record/RID.c.obj: C_COMPILER__DBMS_C_Debug D$:/1/DBM
 #############################################
 # Link the executable DBMS_C.exe
 
-build DBMS_C.exe: C_EXECUTABLE_LINKER__DBMS_C_Debug CMakeFiles/DBMS_C.dir/file/BlockId.c.obj CMakeFiles/DBMS_C.dir/file/Page.c.obj CMakeFiles/DBMS_C.dir/file/FileManager.c.obj CMakeFiles/DBMS_C.dir/head/ByteBuffer.c.obj CMakeFiles/DBMS_C.dir/test/test.c.obj CMakeFiles/DBMS_C.dir/log/LogIterator.c.obj CMakeFiles/DBMS_C.dir/log/LogManager.c.obj CMakeFiles/DBMS_C.dir/buffer/Buffer.c.obj CMakeFiles/DBMS_C.dir/buffer/BufferManager.c.obj CMakeFiles/DBMS_C.dir/head/Error.c.obj CMakeFiles/DBMS_C.dir/record/Schema.c.obj CMakeFiles/DBMS_C.dir/head/map.c.obj CMakeFiles/DBMS_C.dir/record/Layout.c.obj CMakeFiles/DBMS_C.dir/record/RID.c.obj
+build DBMS_C.exe: C_EXECUTABLE_LINKER__DBMS_C_Debug CMakeFiles/DBMS_C.dir/file/BlockId.c.obj CMakeFiles/DBMS_C.dir/file/Page.c.obj CMakeFiles/DBMS_C.dir/file/FileManager.c.obj CMakeFiles/DBMS_C.dir/head/ByteBuffer.c.obj CMakeFiles/DBMS_C.dir/test/test.c.obj CMakeFiles/DBMS_C.dir/log/LogIterator.c.obj CMakeFiles/DBMS_C.dir/log/LogManager.c.obj CMakeFiles/DBMS_C.dir/buffer/Buffer.c.obj CMakeFiles/DBMS_C.dir/buffer/BufferManager.c.obj CMakeFiles/DBMS_C.dir/head/Error.c.obj CMakeFiles/DBMS_C.dir/record/Schema.c.obj CMakeFiles/DBMS_C.dir/head/map.c.obj CMakeFiles/DBMS_C.dir/record/Layout.c.obj CMakeFiles/DBMS_C.dir/record/RID.c.obj CMakeFiles/DBMS_C.dir/tx/BufferList.c.obj
   FLAGS = --coverage -g
   LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\DBMS_C.dir
