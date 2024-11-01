@@ -459,6 +459,55 @@ void LayoutTest(){
         fieldNode = fieldNode->next;
     }
 }
+typedef struct LinkNode{
+    int data;
+    struct LinkNode *next;
+}LinkNode;
+LinkNode *LinkInit(){
+    LinkNode*head = malloc(sizeof(LinkNode));
+    head->next = NULL;
+    return head;
+}
+void LinkAdd(LinkNode*head,int data){
+    LinkNode *p = head;
+    while(p->next!=NULL){
+        p = p->next;
+    }
+    LinkNode *NewLinkNode = malloc(sizeof(LinkNode));
+    NewLinkNode->next = NULL;
+    NewLinkNode->data = data;
+    p->next = NewLinkNode;
+}
+void LinkDelete(LinkNode*head,int data){
+    LinkNode *p = head->next;
+    LinkNode *q = head;
+    while(p){
+        if(p->data==data){
+            q->next = p->next;
+            break;
+        }
+        q = p;
+        p = p->next;
+    }
+    free(p);
+}
+void LinkShow(LinkNode*head){
+    int i = 0;
+    LinkNode*p = head->next;
+    while(p){
+        printf("%d:%d\n",i++,p->data);
+        p=p->next;
+    }
+}
+void testLink(){
+    LinkNode *head = LinkInit();
+    LinkAdd(head,1);
+    LinkAdd(head,2);
+    LinkAdd(head,3);
+    LinkShow(head);
+    LinkDelete(head,3);
+    LinkShow(head);
+}
 int main() {
 //    BlockTest();
 //testByteBuffer();
@@ -478,6 +527,7 @@ int main() {
     //mapTest();
     //testMapStruct();
     //test_SchemaAddField();
-    LayoutTest();
+    //LayoutTest();
+    testLink();
     return 0;
 }
