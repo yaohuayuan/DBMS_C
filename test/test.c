@@ -505,8 +505,46 @@ void testLink(){
     LinkAdd(head,2);
     LinkAdd(head,3);
     LinkShow(head);
-    LinkDelete(head,3);
+    LinkDelete(head,4);
     LinkShow(head);
+}
+void test_BufferList() {
+    // 初始化 BufferManager
+    FileManager *fileManager = FileManagerInit("buffertest",400);
+    LogManager *logManager = LogManagerInit(fileManager,"log");
+    BufferManager *bufferManager = BufferManagerInit(fileManager,logManager,3);
+
+    // 初始化 BufferList
+    BufferList *bufferList = BufferListInit(bufferManager);
+
+
+    // 创建一个 BlockID
+    BlockID blockId;
+    BlockID_Init(&blockId, "test_file.txt", 1);
+
+    // 测试 BufferListPin
+    Buffer *buffer = BufferListGetBuffer(bufferList, blockId);
+
+    BufferListPin(bufferList, blockId);
+    buffer = BufferListGetBuffer(bufferList, blockId);
+
+
+    // 测试 BufferListUnPin
+    BufferListUnPin(bufferList, blockId);
+    buffer = BufferListGetBuffer(bufferList, blockId);
+
+
+    // 测试 BufferListUnpinAll
+    BufferListPin(bufferList, blockId); // 重新 pin 以测试 unpin all
+    BufferListUnpinAll(bufferList);
+    buffer = BufferListGetBuffer(bufferList, blockId);
+
+
+    // 清理
+    BufferListUnpinAll(bufferList); // 确保没有残留
+    free(bufferList->pin);
+    free(bufferList->buffers);
+    free(bufferList);
 }
 int main() {
 //    BlockTest();
@@ -523,11 +561,11 @@ int main() {
     //testFileManagerAppendNew();
     //testBufferFile();
     //testBufferManager();
-//    testBuffer();
+    //testBuffer();
     //mapTest();
     //testMapStruct();
     //test_SchemaAddField();
     //LayoutTest();
-    testLink();
+    //testLink();
     return 0;
 }

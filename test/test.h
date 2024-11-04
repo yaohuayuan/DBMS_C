@@ -7,6 +7,7 @@
 #include "../head/AllHead.h"
 #include "time.h"
 #include "Layout.h"
+#include "BufferList.h"
 void BlockTest();
 void testByteBuffer();
 #endif //DBMS_C_TEST_H

@@ -20,4 +20,6 @@ typedef struct BufferList{
 BufferList *BufferListInit(BufferManager *bufferManager);
 Buffer* BufferListGetBuffer(BufferList *bufferList,BlockID blockId);
 void BufferListPin(BufferList *bufferList,BlockID blockId);
+void BufferListUnPin(BufferList *bufferList,BlockID blockId);
+void BufferListUnpinAll(BufferList *bufferList);
 #endif //DBMS_C_BUFFERLIST_H
