@@ -546,6 +546,62 @@ void test_BufferList() {
     free(bufferList->buffers);
     free(bufferList);
 }
+void mapStrTest(){
+    // 创建并初始化一个整数类型的哈希映射
+    map_str_t m;
+    map_init(&m);
+
+    // 添加一些键值对
+    map_set(&m, "apple", "12");
+    map_set(&m, "banana", "23");
+    map_set(&m, "cherry", "32");
+
+    // 获取值
+    char**val = map_get(&m, "banana");
+    if (val) {
+        printf("Value for 'banana': %s\n", *val);
+    } else {
+        printf("Key 'banana' not found\n");
+    }
+
+    // 遍历所有的键值对
+    const char *key;
+    map_iter_t iter = map_iter(&m);
+    while ((key = map_next(&m, &iter))) {
+        printf("Key: %s, Value: %s\n", key, *map_get(&m, key));
+    }
+
+    // 清理资源
+    map_deinit(&m);
+}
+void testBlockIDConversion() {
+    // 创建一个 BlockID 实例
+    BlockID originalBlock;
+    BlockID_Init(&originalBlock, "example.txt", 123);
+
+    // 将 BlockID 转换为字符串
+    char *str = BlockIDToString(originalBlock);
+    if (str == NULL) {
+        fprintf(stderr, "Failed to allocate memory for the string.\n");
+        return;
+    }
+    printf("Generated string: %s\n", str);
+
+    // 将字符串转换回 BlockID
+    BlockID parsedBlock = BloCKIDString2BlockID(str);
+    printf("Parsed BlockID - File: %s, ID: %d\n", parsedBlock.fileName, parsedBlock.blockId);
+
+    // 检查转换前后是否相等
+    if (BlockIdEqual(originalBlock, parsedBlock)) {
+        printf("Conversion successful!\n");
+    } else {
+        printf("Conversion failed!\n");
+    }
+
+    // 清理
+    free(str);
+    free((void *)parsedBlock.fileName);
+}
 int main() {
 //    BlockTest();
 //testByteBuffer();
@@ -555,7 +611,7 @@ int main() {
 //    testByteBuffer();
 //    printf("%llu",strlen("123"));
     //testPage();
-     //LogCreateLogRecord("wqq",12);
+    // LogCreateLogRecord("wqq",12);
     //testLog();
     //testSize();
     //testFileManagerAppendNew();
@@ -567,5 +623,7 @@ int main() {
     //test_SchemaAddField();
     //LayoutTest();
     //testLink();
+    //mapStrTest();
+    testBlockIDConversion();
     return 0;
 }

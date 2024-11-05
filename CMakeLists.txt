@@ -22,4 +22,4 @@ add_executable(DBMS_C
         file/FileManager.c
         head/ByteBuffer.c
         test/test.c
-        log/LogIterator.c log/LogIterator.h log/LogManager.c log/LogManager.h buffer/Buffer.c buffer/Buffer.h buffer/BufferManager.c buffer/BufferManager.h head/Error.c head/Error.h record/Schema.c record/Schema.h head/map.c head/map.h record/Layout.c record/Layout.h record/RID.c record/RID.h tx/BufferList.c tx/BufferList.h)
+        log/LogIterator.c log/LogIterator.h log/LogManager.c log/LogManager.h buffer/Buffer.c buffer/Buffer.h buffer/BufferManager.c buffer/BufferManager.h head/Error.c head/Error.h record/Schema.c record/Schema.h head/map.c head/map.h record/Layout.c record/Layout.h record/RID.c record/RID.h tx/BufferList.c tx/BufferList.h tx/concurrency/LockTable.c tx/concurrency/LockTable.h tx/concurrency/ConcurrencyManager.c tx/concurrency/ConcurrencyManager.h tx/concurrency/ConcurrencyManager.h record/Layout.c)
