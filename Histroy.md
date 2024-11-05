@@ -502,3 +502,48 @@ Buffer文件测试没有问题
 开始写record文件夹 在此之前要实现Map(head) 这里采用了[GitHub](https://github.com/rxi/map)上面的一个map(哈希版本) 
 ### 31号
 该项目上传到我的GitHub上面并开始实时更新。
+## 十一月
+### 5号
+主要再写tx 并在head中写了一个Error来提取一些可能错误 file中blockID加了一个str2BlockID的函数
+
+#### head
+Error实现是靠两个东西，一个是ErrorCode(枚举)来表示类型,一个是Error结构体变量表示错误
+```c
+typedef enum ErrorCode{
+    Error_NULL,
+    Error_HasSOtherLock,
+    Error_HasXLock
+}ErrorCode;
+typedef struct Error{
+    ErrorCode errorCode;
+    char*  reason;
+}Error;
+```
+这是目前可能遇到错误,未来如果有会逐渐添加
+#### file
+在编写的时候发现map用str做主键,但是有时候函数编写的时候需要传进去的为BlockID,就编写了一个这个函数
+```c
+BlockID BloCKIDString2BlockID(char * str){
+    BlockID blockId = {NULL, 0};
+
+    // 预期的字符串格式: "This BlockID is file: <filename>, ID: <blockId>"
+    char *filenameStart = strstr(str, "file: ") + 6; // 跳过 "file: "
+    char *idStart = strstr(str, ", ID: ") + 6;       // 跳过 ", ID: "
+
+    if (filenameStart && idStart) {
+        // 提取文件名
+        char *filenameEnd = strchr(filenameStart, ',');
+        if (filenameEnd) {
+            *filenameEnd = '\0'; // 终止文件名字符串
+            blockId.fileName = strdup(filenameStart); // 复制文件名
+        }
+
+        // 提取块ID
+        blockId.blockId = atoi(idStart);
+    }
+
+    return blockId;
+}
+```
+#### tx
+这里都是事务 编写了LockTable也就是x锁s锁 以及对其进行管理的ConCurrencyManager 还有BufferList缓冲池
