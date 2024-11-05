@@ -1,8 +1,14 @@
+# 设置最低要求的 CMake 版本
 cmake_minimum_required(VERSION 3.24)
-project(DBMS_C C)
+
+# 项目名称以及版本号
+project(DBMS_C VERSION 1.0.0 LANGUAGES C)
 
 # 设置 C 标准
 set(CMAKE_C_STANDARD 11)
+
+# 设置 CMake 安装目标路径（可选）
+set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
 
 # 包含头文件目录
 include_directories(
@@ -15,11 +21,54 @@ include_directories(
         tx
 )
 
-## 添加可执行文件以及其相关源文件
-add_executable(DBMS_C
+# 将源文件分组，避免重复列出
+set(FILE_SOURCES
         file/BlockId.c
         file/Page.c
         file/FileManager.c
+        )
+
+set(HEAD_SOURCES
         head/ByteBuffer.c
+        head/Error.c
+        head/map.c
+        )
+
+set(TEST_SOURCES
         test/test.c
-        log/LogIterator.c log/LogIterator.h log/LogManager.c log/LogManager.h buffer/Buffer.c buffer/Buffer.h buffer/BufferManager.c buffer/BufferManager.h head/Error.c head/Error.h record/Schema.c record/Schema.h head/map.c head/map.h record/Layout.c record/Layout.h record/RID.c record/RID.h tx/BufferList.c tx/BufferList.h tx/concurrency/LockTable.c tx/concurrency/LockTable.h tx/concurrency/ConcurrencyManager.c tx/concurrency/ConcurrencyManager.h tx/concurrency/ConcurrencyManager.h record/Layout.c)
+        )
+
+set(LOG_SOURCES
+        log/LogIterator.c
+        log/LogManager.c
+        )
+
+set(BUFFER_SOURCES
+        buffer/Buffer.c
+        buffer/BufferManager.c
+        )
+
+set(RECORD_SOURCES
+        record/Schema.c
+        record/Layout.c
+        record/RID.c
+        )
+
+set(TX_SOURCES
+        tx/BufferList.c
+        tx/concurrency/LockTable.c
+        tx/concurrency/ConcurrencyManager.c
+        )
+
+# 将所有源文件放入一个变量中，方便管理
+set(SOURCE_FILES
+        ${FILE_SOURCES}
+        ${HEAD_SOURCES}
+        ${TEST_SOURCES}
+        ${LOG_SOURCES}
+        ${BUFFER_SOURCES}
+        ${RECORD_SOURCES}
+        ${TX_SOURCES}
+        )
+
+
