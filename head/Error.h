@@ -4,7 +4,16 @@
 
 #ifndef DBMS_C_ERROR_H
 #define DBMS_C_ERROR_H
-typedef enum Error{
-    Buffer
+#include "malloc.h"
+#include "stdio.h"
+typedef enum ErrorCode{
+    Error_NULL,
+    Error_HasSOtherLock,
+    Error_HasXLock
 }ErrorCode;
+typedef struct Error{
+    ErrorCode errorCode;
+    char*  reason;
+}Error;
+Error * ErrorInit();
 #endif //DBMS_C_ERROR_H
