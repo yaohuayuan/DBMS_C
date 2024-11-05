@@ -18,4 +18,5 @@ char * getFileName(BlockID b);
 int getBlockId(BlockID);
 char * BlockIDToString(BlockID);
 bool BlockIdEqual(BlockID b1,BlockID b2);
+BlockID BloCKIDString2BlockID(char * str);
 #endif //DBMS_C_BLOCKID_H
