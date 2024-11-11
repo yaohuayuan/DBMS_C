@@ -52,3 +52,52 @@ int RecoverySetString(RecoveryManager*recoveryManager,Buffer*buffer,int offset,c
     BlockID blockId = buffer->blockId;
     return SetStringRecordWriteToLog(recoveryManager->logManager,recoveryManager->txNum,blockId,offset,oldVal);
 }
+IntNode *IntNodeInit(){
+    IntNode *head = malloc(sizeof(IntNode));
+    head->next = NULL;
+    return head;
+}
+void IntNodeAdd(IntNode*head,int data){
+    IntNode * p =head;
+    while (p->next){
+        p = p->next;
+    }
+    IntNode *newNode = malloc(sizeof (IntNode));
+    newNode->next = NULL;
+    newNode->data = data;
+    p->next = newNode;
+}
+bool IntNodeContains(IntNode*head,int data){
+    IntNode *p = head->next;
+    while (p){
+        if(p->data==data)
+            return true;
+        p = p->next;
+    }
+    return false;
+
+}
+void RecoveryDoRecover(RecoveryManager*recoveryManager){
+    IntNode *head = IntNodeInit();
+    LogIterator *logIterator = LogManager2LogManager(recoveryManager->logManager);
+    while (LogIteratorNext(logIterator)){
+        ByteBufferData*byteBufferData= LogIteratorNext(logIterator);
+        ByteBuffer *buffer = bufferAllocate(byteBufferData->bytesData->length);
+        buffer->data = byteBufferData->bytesData->data;
+        buffer->type = byteBufferData->bytesData->type;
+        LogRecord *logRecord = LogRecordInit(buffer);
+        if(logRecord->LogRecordOP() == LogRecordCode_CHECKPOINT)
+            return;
+        if(logRecord->LogRecordOP()==LogRecordCode_COMMIT||logRecord->LogRecordOP()==LogRecordCode_ROLLBACK){
+            IntNodeAdd(head,logRecord->LogRecordTxNum());
+        }else if(!IntNodeContains(head,logRecord->LogRecordTxNum())){
+            logRecord->LogRecordUnDo(recoveryManager->transaction);
+        }
+    }
+}
+void RecoveryRecovery(RecoveryManager*recoveryManager){
+    RecoveryDoRecover(recoveryManager);
+    BufferManagerFlushAll(recoveryManager->bufferManager,recoveryManager->txNum);
+    int lsn = CheckpointRecordWriteToLog(recoveryManager->logManager);
+    LogManagerFlushLSN(recoveryManager->logManager,lsn);
+}

@@ -26,7 +26,7 @@ int RollbackRecordWriteToLog(LogManager*logManager,int TxNum){
     PageSetInt(page,sizeof (int),TxNum);
     return LogManagerAppend(logManager,page->buffer->data,page->buffer->type,page->buffer->size);
 }
-void RollbackRecordUnDo(Transaction*transaction){}
+void RollbackRecordUnDo(Transaction*transaction,LogRecord*logRecord){}
 int RollbackRecordTxNumber(RollbackRecord *rollbackRecord){
     return rollbackRecord->TxNum;
 }
@@ -49,7 +49,7 @@ char * StartRecordTostring(StartRecord *startRecord){
     sprintf(str,"<START %d >",startRecord->TxNum);
     return str;
 }
-void StartRecordUnDo(Transaction*transaction){}
+void StartRecordUnDo(Transaction*transaction,LogRecord*logRecord){}
 int StartRecordWriteToLog(LogManager *logManager,int txNum){
     Page *page = PageInit(2*sizeof (int));
     PageSetInt(page,0,LogRecordCode_START);
@@ -89,7 +89,7 @@ CommitRecord *CommitRecordInit(Page*page){
 LogRecordCode CommitRecordOP(){
     return LogRecordCode_COMMIT;
 }
-void CommitUnDo(Transaction*transaction){}
+void CommitUnDo(Transaction*transaction,LogRecord*logRecord){}
 char* CommitRecordToString(CommitRecord* commitRecord) {
     char* str = malloc(50 * sizeof(char));
     sprintf(str, "<COMMIT %d>", commitRecord->TxNum);
@@ -157,6 +157,15 @@ int SetIntRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId, i
     PageSetInt(page, vpos, val);
     return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
 }
+void SetIntUndo(Transaction*transaction,LogRecord*logRecord){
+    SetIntRecord *setIntRecord = logRecord->LogRecordData.setIntRecord;
+    TransactionPin(transaction,setIntRecord->BlockId);
+    TransactionSetInt(transaction,setIntRecord->BlockId,setIntRecord->Offset,setIntRecord->Val,false);
+    TransactionUnPin(transaction,setIntRecord->BlockId);
+}
+int SetIntTxNumber(SetIntRecord *setIntRecord){
+    return setIntRecord->TxNum;
+}
 CheckpointRecord* CheckpointRecordInit(Page* page) {
     CheckpointRecord* checkpointRecord = malloc(sizeof(CheckpointRecord));
     // CheckpointRecord 不包含任何数据，直接返回
@@ -170,7 +179,7 @@ LogRecordCode CheckpointRecordOP() {
 int CheckpointRecordTxNumber() {
     return -1;
 }
-void CheckpointUnDo(Transaction*transaction){}
+void CheckpointUnDo(Transaction*transaction,LogRecord*logRecord){}
 // CheckpointRecord 转换为字符串
 char* CheckpointRecordToString(CheckpointRecord* checkpointRecord) {
     char* str = malloc(50 * sizeof(char));
@@ -190,7 +199,15 @@ int CheckpointRecordWriteToLog(LogManager* logManager) {
 LogRecordCode SetStringRecordOP() {
     return LogRecordCode_SETSTRING;
 }
-
+void SetStringUndo(Transaction*transaction,LogRecord*logRecord){
+    SetStringRecord *setStringRecord = logRecord->LogRecordData.setStringRecord;
+    TransactionPin(transaction,setStringRecord->BlockId);
+    TransactionSetString(transaction,setStringRecord->BlockId,setStringRecord->Offset,setStringRecord->Val,false);
+    TransactionUnPin(transaction,setStringRecord->BlockId);
+}
+int SetStringTxNumber(SetStringRecord *setStringRecord){
+    return setStringRecord->TxNum;
+}
 // 生成字符串表示
 char* SetStringRecordToString(SetStringRecord* record) {
     char* str = malloc(1024 * sizeof(char));  // 分配足够空间
@@ -234,8 +251,18 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->LogRecordUnDo = RollbackRecordUnDo;
             return logRecord;
         case LogRecordCode_SETINT:
-            break;
+            logRecord->LogRecordData.setIntRecord = SetIntRecordInit(page);
+            logRecord->LogRecordUnDo = SetIntUndo;
+            logRecord->logRecordCode = LogRecordCode_SETINT;
+            logRecord->LogRecordOP = SetIntRecordOP;
+            logRecord->LogRecordTxNum = SetIntTxNumber;
+            return logRecord;
         case LogRecordCode_SETSTRING:
-            break;
+            logRecord->LogRecordData.setStringRecord = SetStringRecordInit(page);
+            logRecord->LogRecordUnDo = SetStringUndo;
+            logRecord->logRecordCode = LogRecordCode_SETSTRING;
+            logRecord->LogRecordOP = SetStringRecordOP;
+            logRecord->LogRecordTxNum = SetStringTxNumber;
+            return logRecord;
     }
 }

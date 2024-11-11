@@ -15,5 +15,16 @@ typedef struct RecoveryManager{
     Transaction *transaction;
     int txNum;
 }RecoveryManager;
+typedef struct IntNode{
+    int data;
+    struct IntNode*next;
+}IntNode;
 RecoveryManager *RecoveryManagerInit(Transaction*transaction,int txNum,LogManager *logManager,BufferManager *bufferManager);
+void RecoveryCommit(RecoveryManager *recoveryManager);
+void RecoveryDoRollback(RecoveryManager*recoveryManager);
+void RecoveryRollback(RecoveryManager*recoveryManager);
+int RecoverySetInt(RecoveryManager*recoveryManager,Buffer*buffer,int offset,int newVal);
+int RecoverySetString(RecoveryManager*recoveryManager,Buffer*buffer,int offset,char* newVal);
+void RecoveryDoRecover(RecoveryManager*recoveryManager);
+void RecoveryRecovery(RecoveryManager*recoveryManager);
 #endif //DBMS_C_RECOVERYMANAGER_H

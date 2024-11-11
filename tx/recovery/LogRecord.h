@@ -56,7 +56,7 @@ typedef struct LogRecord{
     }LogRecordData;
     LogRecordCode (*LogRecordOP)();
     int (*LogRecordTxNum)();
-    void (*LogRecordUnDo)(Transaction *transaction);
+    void (*LogRecordUnDo)(Transaction *transaction,struct LogRecord*logRecord);
 }LogRecord;
 LogRecord * LogRecordInit(ByteBuffer* buffer);
 // 函数声明
