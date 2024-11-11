@@ -7,19 +7,8 @@ project(DBMS_C VERSION 1.0.0 LANGUAGES C)
 # 设置 C 标准
 set(CMAKE_C_STANDARD 11)
 
-# 设置 CMake 安装目标路径（可选）
-set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
-
-# 包含头文件目录
-include_directories(
-        file
-        head
-        test
-        log
-        buffer
-        record
-        tx
-)
+# 可执行文件输出路径
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
 # 将源文件分组，避免重复列出
 set(FILE_SOURCES
@@ -32,7 +21,7 @@ set(HEAD_SOURCES
         head/ByteBuffer.c
         head/Error.c
         head/map.c
-        )
+        head/List.c head/List.h)
 
 set(TEST_SOURCES
         test/test.c
@@ -58,7 +47,8 @@ set(TX_SOURCES
         tx/BufferList.c
         tx/concurrency/LockTable.c
         tx/concurrency/ConcurrencyManager.c
-        )
+        tx/recovery/LogRecord.c
+        tx/recovery/RecoveryManager.c tx/recovery/RecoveryManager.h tx/Transaction.c tx/Transaction.h)
 
 # 将所有源文件放入一个变量中，方便管理
 set(SOURCE_FILES
@@ -71,4 +61,16 @@ set(SOURCE_FILES
         ${TX_SOURCES}
         )
 
+# 定义可执行文件
+add_executable(DBMS_C_EXEC ${SOURCE_FILES})
 
+# 指定头文件目录
+target_include_directories(DBMS_C_EXEC PRIVATE
+        file
+        head
+        test
+        log
+        buffer
+        record
+        tx
+        )

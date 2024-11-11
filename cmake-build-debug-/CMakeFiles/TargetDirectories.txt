@@ -1,2 +1,3 @@
+D:/1/DBMS/DBMS_C/cmake-build-debug-/CMakeFiles/DBMS_C_EXEC.dir
 D:/1/DBMS/DBMS_C/cmake-build-debug-/CMakeFiles/edit_cache.dir
 D:/1/DBMS/DBMS_C/cmake-build-debug-/CMakeFiles/rebuild_cache.dir

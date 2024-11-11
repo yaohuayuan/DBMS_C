@@ -602,6 +602,32 @@ void testBlockIDConversion() {
     free(str);
     free((void *)parsedBlock.fileName);
 }
+void OP(){
+    printf("This is op\n");
+}
+void Function(){
+    printf("This is Function\n");
+}
+void TestFunction(){
+   void (*p)() = NULL;
+   p = OP;
+   p();
+   p = Function;
+   p();
+}
+void testStruct() {
+    struct tese2;  // 前向声明 struct tese2
+
+    typedef struct test1 {
+        struct tese2 *tes2;  // 使用指针避免递归定义
+        int a;
+    } test1;
+
+    struct tese2 {
+        test1 test11;
+    };
+}
+
 int main() {
 //    BlockTest();
 //testByteBuffer();
@@ -624,6 +650,8 @@ int main() {
     //LayoutTest();
     //testLink();
     //mapStrTest();
-    testBlockIDConversion();
+    //testBlockIDConversion();
+    //TestFunction();
+    testStruct();
     return 0;
 }
