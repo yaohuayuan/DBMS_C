@@ -403,6 +403,9 @@ void testMapStruct(){
     map_set(&my_map, "key2", data2);
 
     // 获取数据
+    MyStruct *retrieved_2data = &data1;
+    MyStruct *retrieved_1data = (MyStruct *)map_get(&my_map, "key1");
+    retrieved_1data->id=4;
     MyStruct *retrieved_data = (MyStruct *)map_get(&my_map, "key1");
     if (retrieved_data) {
         printf("ID: %d, Name: %s\n", retrieved_data->id, retrieved_data->name);
@@ -636,13 +639,14 @@ void testRecoveryPrintValue(FileManager *fileManager,BlockID blockId0,BlockID bl
     FileManagerRead(fileManager,blockId0,page0);
     int pos = 0;
     for(int i=0;i<6;i++){
-        ByteBufferData *out0 = NULL;
+        ByteBufferData *out0 = ByteBufferDataInit();
         PageGetInt(page0, pos, out0);
-        ByteBufferData *out1 = NULL;
+        ByteBufferData *out1 = ByteBufferDataInit();
         PageGetInt(page1, pos, out1);
-        printf("%d:%d %d",i,*out0->intData,*out1->intData);
+        printf("%d:%d %d ",i,*out0->intData,*out1->intData);
+        pos+=4;
     }
-    printf("%s %s", PageGetString(page0,30), PageGetString(page0,30));
+    printf("%s %s", PageGetString(page0,30), PageGetString(page1,30));
     printf("\n");
     
 }
@@ -678,9 +682,15 @@ void testRecoveryModify(FileManager*fileManager,LogManager*logManager,BufferMana
     }
     TransactionSetString(tx1,blockId0,30,"uyw",true);
     TransactionSetString(tx2,blockId1,30,"xyz",true);
-    TransactionCommit(tx1);
-    TransactionCommit(tx2);
+    BufferManagerFlushAll(bufferManager,3);
+    BufferManagerFlushAll(bufferManager,4);
+//    TransactionCommit(tx1);
+//    TransactionCommit(tx2);
     testRecoveryPrintValue(fileManager,blockId0,blockId1,"After modification:");
+    TransactionRollback(tx1);
+//    TransactionRollback(tx2);
+    testRecoveryPrintValue(fileManager,blockId0,blockId1,"After Rollback:");
+
 }
 
 void testRecoveryRecover(FileManager*fileManager,LogManager*logManager,BufferManager*bufferManager,BlockID blockId0,BlockID blockId1) {
@@ -690,13 +700,23 @@ void testRecoveryRecover(FileManager*fileManager,LogManager*logManager,BufferMan
 }
 
 void testRecovery(){
+    time_t timep;
+    struct tm *p;
+    time(&timep);
+    p = gmtime(&timep);
+//    char *fileName="12345";
+//    char *LogName="Log11";
+    char LogName[512];
+    sprintf(LogName,"Log_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+    char fileName[512];
+    sprintf(fileName,"Text_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
     FileManager *fileManager = FileManagerInit("RecoveryTest",400);
-    LogManager *logManager = LogManagerInit(fileManager,"log");
+    LogManager *logManager = LogManagerInit(fileManager,LogName);
     BufferManager *bufferManager = BufferManagerInit(fileManager,logManager,3);
     BlockID blockId0,blockId1;
-    BlockID_Init(&blockId0,"testfile1",0);
-    BlockID_Init(&blockId1,"testfile1",1);
-    if(FileManagerLength(fileManager,"testfile1")==0){
+    BlockID_Init(&blockId0,fileName,0);
+    BlockID_Init(&blockId1,fileName,1);
+    if(FileManagerLength(fileManager,fileName)==0){
         testRecoveryInitialize(fileManager,logManager,bufferManager,blockId0,blockId1);
         testRecoveryModify(fileManager,logManager,bufferManager,blockId0,blockId1);
     }else{

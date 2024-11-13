@@ -12,6 +12,8 @@
 #include <dirent.h>
 #include <stdbool.h>
 #include <malloc.h>
+#include <unistd.h> // for fsync
+
 typedef struct {
     FILE *File_Data;
     FILE *File_Type;

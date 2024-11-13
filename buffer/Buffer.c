@@ -24,6 +24,11 @@ void BufferFlush(Buffer *buffer){
     if(buffer->txNum>=0){
         LogManagerFlushLSN(buffer->logManager,buffer->lsn);
         FileManagerWrite(buffer->fileManager,buffer->blockId,buffer->page);
+//        Page *page = PageInit(400);
+//        FileManagerRead(buffer->fileManager,buffer->blockId,page);
+//        ByteBufferData *out = ByteBufferDataInit();
+//        PageGetInt(page, 0, out);
+//
         buffer->txNum = -1;
     }
 }

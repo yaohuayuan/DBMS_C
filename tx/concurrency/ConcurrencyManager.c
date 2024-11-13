@@ -23,7 +23,7 @@ bool ConCurrencyManagerHasXLock(ConCurrencyManager *conCurrencyManager,BlockID b
     return LockType!=NULL&&(strcmp(*LockType,"X")==0);
 }
 void ConCurrencyManagerXLock(ConCurrencyManager *conCurrencyManager,BlockID blockId){
-    char** value = map_get(conCurrencyManager->mapStr,BlockIDToString(blockId));
+    //char** value = map_get(conCurrencyManager->mapStr,BlockIDToString(blockId));
     Error *error = ErrorInit();
     if(ConCurrencyManagerHasXLock(conCurrencyManager,blockId)){
         ConCurrencyManagerSLock(conCurrencyManager,blockId);

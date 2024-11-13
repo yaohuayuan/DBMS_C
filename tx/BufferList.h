@@ -7,11 +7,15 @@
 #include "map.h"
 #include "Buffer.h"
 #include "BufferManager.h"
-typedef  map_t(Buffer) map_Buffer_t;
+
 typedef struct BlockIDNode{
     BlockID blockId;
     struct BlockIDNode* next;
 }BlockIDNode;
+typedef struct BufferTEMP{
+    Buffer *buffer;
+}BufferTEMP;
+typedef  map_t(BufferTEMP) map_Buffer_t;
 typedef struct BufferList{
     map_Buffer_t *buffers;
     BlockIDNode *pin;

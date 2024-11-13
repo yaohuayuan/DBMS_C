@@ -136,20 +136,29 @@ void FileManagerWrite(FileManager *fm, BlockID blockId, Page *page) {
     FileSet *fileSet = GetFile(fm, blockId.fileName);
     FILE *f = fileSet->File_Data;
     FILE *fType = fileSet->File_Type;
-    if (f == NULL) {
+
+    if (f == NULL || fType == NULL) {
         perror("File not found");
         return;
     }
+
     fseek(f, fm->blockSize * getBlockId(blockId), SEEK_SET);
-    fflush(f);
     fseek(fType, fm->blockSize * getBlockId(blockId), SEEK_SET);
-    fflush(fType);
+
     size_t bytesWritten = fwrite(page->buffer->data, 1, fm->blockSize, f);
-    size_t bytesWrittenType =fwrite(page->buffer->type, 1, fm->blockSize, fType);
-    if (bytesWritten != fm->blockSize || bytesWrittenType!=fm->blockSize) {
+    size_t bytesWrittenType = fwrite(page->buffer->type, 1, fm->blockSize, fType);
+
+    if (bytesWritten != fm->blockSize || bytesWrittenType != fm->blockSize) {
         perror("Failed to write the complete block");
     }
 
+    // 强制刷新文件缓冲区，确保立即保存数据
+    fflush(f);
+    fflush(fType);
+
+    // 可选：如果希望确保数据立即写入到磁盘，可以在写入完成后关闭文件
+    // fclose(f);
+    // fclose(fType);
 
 }
 void FileManagerClose(FileManager *fm) {

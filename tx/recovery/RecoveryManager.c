@@ -19,13 +19,13 @@ void RecoveryCommit(RecoveryManager *recoveryManager){
 }
 void RecoveryDoRollback(RecoveryManager*recoveryManager){
     LogIterator *logIterator = LogManager2LogManager(recoveryManager->logManager);
-    while (LogIteratorNext(logIterator)){
+    while (LogIteratorHasNext(logIterator)){
        ByteBufferData*byteBufferData= LogIteratorNext(logIterator);
         ByteBuffer *buffer = bufferAllocate(byteBufferData->bytesData->length);
         buffer->data = byteBufferData->bytesData->data;
         buffer->type = byteBufferData->bytesData->type;
         LogRecord *logRecord = LogRecordInit(buffer);
-        if(logRecord->LogRecordTxNum()==recoveryManager->txNum){
+        if(logRecord->LogRecordTxNum(logRecord)==recoveryManager->txNum){
             if(logRecord->LogRecordOP() == LogRecordCode_START){
                 return;
             }
@@ -41,7 +41,7 @@ void RecoveryRollback(RecoveryManager*recoveryManager){
 }
 int RecoverySetInt(RecoveryManager*recoveryManager,Buffer*buffer,int offset,int newVal){
     int oldVal;
-    ByteBufferData *out = NULL;
+    ByteBufferData *out = ByteBufferDataInit();
     PageGetInt(buffer->page, offset, out);
     oldVal =*out->intData;
     BlockID blockId = buffer->blockId;
@@ -80,7 +80,7 @@ bool IntNodeContains(IntNode*head,int data){
 void RecoveryDoRecover(RecoveryManager*recoveryManager){
     IntNode *head = IntNodeInit();
     LogIterator *logIterator = LogManager2LogManager(recoveryManager->logManager);
-    while (LogIteratorNext(logIterator)){
+    while (LogIteratorHasNext(logIterator)){
         ByteBufferData*byteBufferData= LogIteratorNext(logIterator);
         ByteBuffer *buffer = bufferAllocate(byteBufferData->bytesData->length);
         buffer->data = byteBufferData->bytesData->data;
@@ -89,8 +89,8 @@ void RecoveryDoRecover(RecoveryManager*recoveryManager){
         if(logRecord->LogRecordOP() == LogRecordCode_CHECKPOINT)
             return;
         if(logRecord->LogRecordOP()==LogRecordCode_COMMIT||logRecord->LogRecordOP()==LogRecordCode_ROLLBACK){
-            IntNodeAdd(head,logRecord->LogRecordTxNum());
-        }else if(!IntNodeContains(head,logRecord->LogRecordTxNum())){
+            IntNodeAdd(head,logRecord->LogRecordTxNum(logRecord));
+        }else if(!IntNodeContains(head,logRecord->LogRecordTxNum(logRecord))){
             logRecord->LogRecordUnDo(recoveryManager->transaction,logRecord);
         }
     }

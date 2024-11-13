@@ -27,8 +27,8 @@ int RollbackRecordWriteToLog(LogManager*logManager,int TxNum){
     return LogManagerAppend(logManager,page->buffer->data,page->buffer->type,page->buffer->size);
 }
 void RollbackRecordUnDo(Transaction*transaction,LogRecord*logRecord){}
-int RollbackRecordTxNumber(RollbackRecord *rollbackRecord){
-    return rollbackRecord->TxNum;
+int RollbackRecordTxNumber(LogRecord *logRecord){
+    return logRecord->LogRecordData.rollbackRecord->TxNum;
 }
 StartRecord * StartRecordInit(Page*page){
     int tPos = sizeof (tPos);
@@ -41,8 +41,8 @@ StartRecord * StartRecordInit(Page*page){
 LogRecordCode StartRecordOP(){
     return LogRecordCode_START;
 }
-int StartRecordTxNumber(StartRecord *startRecord){
-    return startRecord->TxNum;
+int StartRecordTxNumber(LogRecord *logRecord ){
+    return logRecord->LogRecordData.startRecord->TxNum;
 }
 char * StartRecordTostring(StartRecord *startRecord){
     char *str = NULL;
@@ -58,21 +58,21 @@ int StartRecordWriteToLog(LogManager *logManager,int txNum){
 }
 SetStringRecord* SetStringRecordInit(Page* page) {
     SetStringRecord* record = malloc(sizeof(SetStringRecord));
-
     int tpos = sizeof(int);
     ByteBufferData* byteBufferData = ByteBufferDataInit();
     PageGetInt(page, tpos, byteBufferData);
     record->TxNum = *byteBufferData->intData;
-
     int fpos = tpos + sizeof(int);
     char* filename = PageGetString(page, fpos);
-    int bpos = fpos + strlen(filename) + 1; // 假设 PageGetString 会返回 null 结尾的字符串
-    int blknum = PageGetInt(page, bpos, byteBufferData);
+    int bpos = fpos + PageMaxLength(strlen(filename)) ; // 假设 PageGetString 会返回 null 结尾的字符串
+    int blknum ;
+    PageGetInt(page, bpos, byteBufferData);
+    blknum = *byteBufferData->intData;
      BlockID_Init(&record->BlockId,filename, blknum);
-
     int opos = bpos + sizeof(int);
-    record->Offset = PageGetInt(page, opos, byteBufferData);
 
+    PageGetInt(page, opos, byteBufferData);
+    record->Offset = *byteBufferData->intData;
     int vpos = opos + sizeof(int);
     record->Val = PageGetString(page, vpos);
 
@@ -103,8 +103,8 @@ int CommitRecordWriteToLog(LogManager* logManager, int txNum) {
     PageSetInt(page, sizeof(int), txNum);
     return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
 }
-int CommitRecordTxNumber(CommitRecord*commitRecord){
-    return commitRecord->TxNum;
+int CommitRecordTxNumber(LogRecord *logRecord){
+    return logRecord->LogRecordData.commitRecord->TxNum;
 }
 // SetIntRecord 初始化
 SetIntRecord* SetIntRecordInit(Page* page) {
@@ -163,8 +163,8 @@ void SetIntUndo(Transaction*transaction,LogRecord*logRecord){
     TransactionSetInt(transaction,setIntRecord->BlockId,setIntRecord->Offset,setIntRecord->Val,false);
     TransactionUnPin(transaction,setIntRecord->BlockId);
 }
-int SetIntTxNumber(SetIntRecord *setIntRecord){
-    return setIntRecord->TxNum;
+int SetIntTxNumber(LogRecord*logRecord){
+    return logRecord->LogRecordData.setIntRecord->TxNum;
 }
 CheckpointRecord* CheckpointRecordInit(Page* page) {
     CheckpointRecord* checkpointRecord = malloc(sizeof(CheckpointRecord));
@@ -205,8 +205,8 @@ void SetStringUndo(Transaction*transaction,LogRecord*logRecord){
     TransactionSetString(transaction,setStringRecord->BlockId,setStringRecord->Offset,setStringRecord->Val,false);
     TransactionUnPin(transaction,setStringRecord->BlockId);
 }
-int SetStringTxNumber(SetStringRecord *setStringRecord){
-    return setStringRecord->TxNum;
+int SetStringTxNumber(LogRecord *logRecord){
+    return logRecord->LogRecordData.setStringRecord->TxNum;
 }
 int SetStringRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId, int offset, char* val) {
     int tpos = sizeof(int);
@@ -214,9 +214,9 @@ int SetStringRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId
     int bpos = fpos + PageMaxLength(strlen(blockId.fileName));
     int opos = bpos + sizeof(int);
     int vpos = opos + sizeof(int);
-    int recLen = vpos + sizeof(int);
+    int recLen = vpos + PageMaxLength(strlen(val));
     Page* page = PageInit(recLen);
-    PageSetInt(page, 0, LogRecordCode_SETINT);
+    PageSetInt(page, 0, LogRecordCode_SETSTRING);
     PageSetInt(page, tpos, txNum);
     PageSetString(page, fpos, blockId.fileName);
     PageSetInt(page, bpos, blockId.blockId);
@@ -232,7 +232,7 @@ char* SetStringRecordToString(SetStringRecord* record) {
 }
 LogRecord * LogRecordInit(ByteBuffer* buffer){
     Page *page = PageInitBytes(buffer);
-    ByteBufferData *out = NULL;
+    ByteBufferData *out = ByteBufferDataInit();
     PageGetInt(page, 0, out);
     LogRecordCode code = * out->intData;
     LogRecord * logRecord = malloc(sizeof(LogRecord));
@@ -243,7 +243,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->logRecordCode = LogRecordCode_COMMIT;
             logRecord->LogRecordOP = CommitRecordOP;
             logRecord->LogRecordUnDo=CommitUnDo;
-            logRecord->LogRecordTxNum = CommitRecordWriteToLog;
+            logRecord->LogRecordTxNum = CommitRecordTxNumber;
             return logRecord;
         case LogRecordCode_CHECKPOINT:
             logRecord->LogRecordData.checkpointRecord = CheckpointRecordInit(page);

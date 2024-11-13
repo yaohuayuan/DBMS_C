@@ -17,6 +17,10 @@ void BufferManagerFlushAll(BufferManager *bufferManager,int tx){
     for(int i=0;i<bufferManager->bufferSize;i++){
         if(bufferManager->bufferPool[i]->txNum == tx){
             BufferFlush(bufferManager->bufferPool[i]);
+//            Page *page = PageInit(400);
+//            FileManagerRead(bufferManager->bufferPool[i]->fileManager,bufferManager->bufferPool[i]->blockId,page);
+//            ByteBufferData *out = ByteBufferDataInit();
+//            PageGetInt(page, 0, out);
         }
     }
 }

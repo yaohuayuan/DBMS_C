@@ -3,6 +3,11 @@
 //
 
 #include "BufferList.h"
+BufferTEMP *BufferTEMPInit(){
+    BufferTEMP  *bufferTemp = malloc(sizeof (BufferTEMP));
+    bufferTemp->buffer = NULL;
+    return bufferTemp;
+}
 BufferList *BufferListInit(BufferManager *bufferManager){
     BufferList*bufferList = malloc(sizeof(BufferList));
     bufferList->bufferManager = bufferManager;
@@ -13,12 +18,15 @@ BufferList *BufferListInit(BufferManager *bufferManager){
     return bufferList;
 }
 Buffer* BufferListGetBuffer(BufferList *bufferList,BlockID blockId){
-    Buffer*buffer = map_get(bufferList->buffers,BlockIDToString(blockId));
+    BufferTEMP *bufferTemp= map_get(bufferList->buffers,BlockIDToString(blockId));
+    Buffer*buffer = bufferTemp->buffer;
     return buffer;
 }
 void BufferListPin(BufferList *bufferList,BlockID blockId){
     Buffer  *buffer = BufferManagerPin(bufferList->bufferManager,blockId);
-    map_set(bufferList->buffers,BlockIDToString(blockId),*buffer);
+    BufferTEMP *bufferTemp = BufferTEMPInit();
+    bufferTemp->buffer = buffer;
+    map_set(bufferList->buffers,BlockIDToString(blockId),*bufferTemp);
     BlockIDNode *blockIdNode = bufferList->pin;
     while(blockIdNode->next!=NULL){
         blockIdNode=blockIdNode->next;
@@ -29,7 +37,9 @@ void BufferListPin(BufferList *bufferList,BlockID blockId){
     blockIdNode->next = NewBlockIDNode;
 }
 void BufferListUnPin(BufferList *bufferList,BlockID blockId){
-    Buffer*buffer = map_get(bufferList->buffers,BlockIDToString(blockId));
+    BufferTEMP *bufferTemp= map_get(bufferList->buffers,BlockIDToString(blockId));
+    Buffer*buffer = bufferTemp->buffer;
+    BufferManagerUnpin(bufferList->bufferManager,buffer);
     BlockIDNode *p = bufferList->pin->next;
     BlockIDNode *q = bufferList->pin;
     while(p){
@@ -57,7 +67,8 @@ void BufferListUnPin(BufferList *bufferList,BlockID blockId){
 void BufferListUnpinAll(BufferList *bufferList) {
     BlockIDNode *p = bufferList->pin->next, *temp;
     while (p) {
-        Buffer *buffer = map_get(bufferList->buffers, BlockIDToString(p->blockId));
+        BufferTEMP *bufferTemp= map_get(bufferList->buffers,BlockIDToString(p->blockId));
+        Buffer*buffer = bufferTemp->buffer;
         BufferManagerUnpin(bufferList->bufferManager, buffer);
         p = p->next;
     }

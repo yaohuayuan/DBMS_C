@@ -55,7 +55,7 @@ typedef struct LogRecord{
         RollbackRecord *rollbackRecord;
     }LogRecordData;
     LogRecordCode (*LogRecordOP)();
-    int (*LogRecordTxNum)();
+    int (*LogRecordTxNum)(struct LogRecord* logRecord);
     void (*LogRecordUnDo)(Transaction *transaction,struct LogRecord*logRecord);
 }LogRecord;
 LogRecord * LogRecordInit(ByteBuffer* buffer);

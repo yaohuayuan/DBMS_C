@@ -4,14 +4,13 @@
 
 #include "Transaction.h"
 #include "recovery/RecoveryManager.h"
-
+int static nextTxNum=0;
 int TransactionNextTxNumber(Transaction *transaction) {
-    transaction->nextTxNum++;
-    return transaction->nextTxNum;
+    nextTxNum++;
+    return nextTxNum;
 }
 Transaction* TransactionInit(FileManager*fileManager, LogManager*logManager, BufferManager*bufferManager){
     Transaction *transaction = malloc(sizeof (Transaction));
-    transaction->nextTxNum= 0;
     transaction->txNum = TransactionNextTxNumber(transaction);
     transaction->fileManager = fileManager;
     transaction->bufferManager = bufferManager;

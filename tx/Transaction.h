@@ -10,7 +10,7 @@
 # define Transaction_END_OF_FILE (-1)
 typedef struct RecoveryManager RecoveryManager;
 typedef struct Transaction{
-    int nextTxNum;
+
     RecoveryManager *recoveryManager;
     ConCurrencyManager *conCurrencyManager;
     BufferManager *bufferManager;
