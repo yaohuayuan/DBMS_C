@@ -22,13 +22,13 @@ Transaction* TransactionInit(FileManager*fileManager, LogManager*logManager, Buf
 }
 void TransactionCommit(Transaction*transaction){
     RecoveryCommit(transaction->recoveryManager);
-    printf("transaction %d commit",transaction->txNum);
+    printf("transaction %d commit\n",transaction->txNum);
     ConCurrencyManagerRelease(transaction->conCurrencyManager);
     BufferListUnpinAll(transaction->bufferList);
 }
 void TransactionRollback(Transaction*transaction){
     RecoveryRollback(transaction->recoveryManager);
-    printf("transaction %d rollback",transaction->txNum);
+    printf("transaction %d rollback\n",transaction->txNum);
     ConCurrencyManagerRelease(transaction->conCurrencyManager);
     BufferListUnpinAll(transaction->bufferList);
 }
