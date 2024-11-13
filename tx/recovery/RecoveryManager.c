@@ -29,7 +29,7 @@ void RecoveryDoRollback(RecoveryManager*recoveryManager){
             if(logRecord->LogRecordOP() == LogRecordCode_START){
                 return;
             }
-            logRecord->LogRecordUnDo(recoveryManager->transaction);
+            logRecord->LogRecordUnDo(recoveryManager->transaction,logRecord);
         }
     }
 }
@@ -91,7 +91,7 @@ void RecoveryDoRecover(RecoveryManager*recoveryManager){
         if(logRecord->LogRecordOP()==LogRecordCode_COMMIT||logRecord->LogRecordOP()==LogRecordCode_ROLLBACK){
             IntNodeAdd(head,logRecord->LogRecordTxNum());
         }else if(!IntNodeContains(head,logRecord->LogRecordTxNum())){
-            logRecord->LogRecordUnDo(recoveryManager->transaction);
+            logRecord->LogRecordUnDo(recoveryManager->transaction,logRecord);
         }
     }
 }

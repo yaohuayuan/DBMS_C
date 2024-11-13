@@ -1,9 +1,0 @@
-# ninja log v5
-2	131	7494671245061769	CMakeFiles/DBMS_C.dir/file/Page.c.obj	5923df75f954b932
-1	502	7494109711408165	CMakeFiles/DBMS_C.dir/file/BlockId.c.obj	abc92d06fc2f72b5
-2	135	7494684008453673	CMakeFiles/DBMS_C.dir/head/ByteBuffer.c.obj	50030cbf3ffb4ab4
-34	516	7494109711506817	CMakeFiles/DBMS_C.dir/file/FileManager.c.obj	7cbbae3b6edcc748
-29	202	7494799911821967	CMakeFiles/DBMS_C.dir/log/LogManager.c.obj	2cd29fa1b3401864
-2	200	7494799911797780	CMakeFiles/DBMS_C.dir/log/LogIterator.c.obj	99ac9269bb20dad6
-2	174	7494830032221841	CMakeFiles/DBMS_C.dir/test/test.c.obj	30cffcf55d6f5692
-175	280	7494830033255950	DBMS_C.exe	c74412afd060345a

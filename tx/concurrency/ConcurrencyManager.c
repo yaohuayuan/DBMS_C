@@ -34,8 +34,18 @@ void ConCurrencyManagerXLock(ConCurrencyManager *conCurrencyManager,BlockID bloc
 void ConCurrencyManagerRelease(ConCurrencyManager *conCurrencyManager){
     const char *key;
     map_iter_t iter = map_iter(conCurrencyManager->mapStr);
+    const char *keys_to_remove[conCurrencyManager->mapStr->base.nnodes];  // 临时存储要删除的键
+    int index = 0;
+
+// 遍历所有键并记录
     while ((key = map_next(conCurrencyManager->mapStr, &iter))) {
         LockTableUnLock(conCurrencyManager->lockTable, BloCKIDString2BlockID(key));
-        map_remove(conCurrencyManager->mapStr,key);
+        keys_to_remove[index++] = key;
     }
+
+// 遍历结束后逐一删除记录的键
+    for (int i = 0; i < index; i++) {
+        map_remove(conCurrencyManager->mapStr, keys_to_remove[i]);
+    }
+
 }

@@ -208,6 +208,22 @@ void SetStringUndo(Transaction*transaction,LogRecord*logRecord){
 int SetStringTxNumber(SetStringRecord *setStringRecord){
     return setStringRecord->TxNum;
 }
+int SetStringRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId, int offset, char* val) {
+    int tpos = sizeof(int);
+    int fpos = tpos + sizeof(int);
+    int bpos = fpos + PageMaxLength(strlen(blockId.fileName));
+    int opos = bpos + sizeof(int);
+    int vpos = opos + sizeof(int);
+    int recLen = vpos + sizeof(int);
+    Page* page = PageInit(recLen);
+    PageSetInt(page, 0, LogRecordCode_SETINT);
+    PageSetInt(page, tpos, txNum);
+    PageSetString(page, fpos, blockId.fileName);
+    PageSetInt(page, bpos, blockId.blockId);
+    PageSetInt(page, opos, offset);
+    PageSetString(page, vpos, val);
+    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
+}
 // 生成字符串表示
 char* SetStringRecordToString(SetStringRecord* record) {
     char* str = malloc(1024 * sizeof(char));  // 分配足够空间

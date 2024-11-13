@@ -5,6 +5,7 @@
 #include <string.h>
 #include "map.h"
 #include "Schema.h"
+#include "Transaction.h"
 // ²âÊÔ BlockID ¹¦ÄÜ
 void BlockTest() {
     BlockID id1, id2, id3;
@@ -627,7 +628,81 @@ void testStruct() {
         test1 test11;
     };
 }
+void testRecoveryPrintValue(FileManager *fileManager,BlockID blockId0,BlockID blockId1,char *msg){
+    printf("%s\n",msg);
+    Page *page0 = PageInit(fileManager->blockSize);
+    Page *page1 = PageInit(fileManager->blockSize);
+    FileManagerRead(fileManager,blockId1,page1);
+    FileManagerRead(fileManager,blockId0,page0);
+    int pos = 0;
+    for(int i=0;i<6;i++){
+        ByteBufferData *out0 = NULL;
+        PageGetInt(page0, pos, out0);
+        ByteBufferData *out1 = NULL;
+        PageGetInt(page1, pos, out1);
+        printf("%d:%d %d",i,*out0->intData,*out1->intData);
+    }
+    printf("%s %s", PageGetString(page0,30), PageGetString(page0,30));
+    printf("\n");
+    
+}
+void testRecoveryInitialize(FileManager*fileManager,LogManager*logManager,BufferManager*bufferManager,BlockID blockId0,BlockID blockId1) {
+    Transaction *tx1 = TransactionInit(fileManager,logManager,bufferManager);
+    Transaction *tx2 = TransactionInit(fileManager,logManager,bufferManager);
+    TransactionPin(tx1,blockId0);
+    TransactionPin(tx2,blockId1);
+    int pos = 0;
+    for(int i=0;i<6;i++){
+        TransactionSetInt(tx1,blockId0,pos,pos,false);
+        TransactionSetInt(tx2,blockId1,pos,pos,false);
+        pos+=sizeof(int);
+    }
+    TransactionSetString(tx1,blockId0,30,"abc",false);
+    TransactionSetString(tx2,blockId1,30,"def",false);
+    TransactionCommit(tx1);
+    TransactionCommit(tx2);
+    testRecoveryPrintValue(fileManager,blockId0,blockId1,"After Initialization:");
 
+}
+
+void testRecoveryModify(FileManager*fileManager,LogManager*logManager,BufferManager*bufferManager,BlockID blockId0,BlockID blockId1) {
+    Transaction *tx1 = TransactionInit(fileManager,logManager,bufferManager);
+    Transaction *tx2 = TransactionInit(fileManager,logManager,bufferManager);
+    TransactionPin(tx1,blockId0);
+    TransactionPin(tx2,blockId1);
+    int pos = 0;
+    for(int i=0;i<6;i++){
+        TransactionSetInt(tx1,blockId0,pos,pos+100,true);
+        TransactionSetInt(tx2,blockId1,pos,pos+100,true);
+        pos+=sizeof(int);
+    }
+    TransactionSetString(tx1,blockId0,30,"uyw",true);
+    TransactionSetString(tx2,blockId1,30,"xyz",true);
+    TransactionCommit(tx1);
+    TransactionCommit(tx2);
+    testRecoveryPrintValue(fileManager,blockId0,blockId1,"After modification:");
+}
+
+void testRecoveryRecover(FileManager*fileManager,LogManager*logManager,BufferManager*bufferManager,BlockID blockId0,BlockID blockId1) {
+    Transaction *tx1 = TransactionInit(fileManager,logManager,bufferManager);
+    TransactionRecover(tx1);
+    testRecoveryPrintValue(fileManager,blockId0,blockId1,"After Recovery:");
+}
+
+void testRecovery(){
+    FileManager *fileManager = FileManagerInit("RecoveryTest",400);
+    LogManager *logManager = LogManagerInit(fileManager,"log");
+    BufferManager *bufferManager = BufferManagerInit(fileManager,logManager,3);
+    BlockID blockId0,blockId1;
+    BlockID_Init(&blockId0,"testfile1",0);
+    BlockID_Init(&blockId1,"testfile1",1);
+    if(FileManagerLength(fileManager,"testfile1")==0){
+        testRecoveryInitialize(fileManager,logManager,bufferManager,blockId0,blockId1);
+        testRecoveryModify(fileManager,logManager,bufferManager,blockId0,blockId1);
+    }else{
+        testRecoveryRecover(fileManager,logManager,bufferManager,blockId0,blockId1);
+    }
+}
 int main() {
 //    BlockTest();
 //testByteBuffer();
@@ -652,6 +727,7 @@ int main() {
     //mapStrTest();
     //testBlockIDConversion();
     //TestFunction();
-    testStruct();
+    //testStruct();
+    testRecovery();
     return 0;
 }

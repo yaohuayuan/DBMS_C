@@ -25,6 +25,7 @@ void BufferListPin(BufferList *bufferList,BlockID blockId){
     }
     BlockIDNode *NewBlockIDNode = malloc(sizeof(BlockIDNode));
     BlockID_Init(&NewBlockIDNode->blockId,blockId.fileName,blockId.blockId);
+    NewBlockIDNode->next = NULL;
     blockIdNode->next = NewBlockIDNode;
 }
 void BufferListUnPin(BufferList *bufferList,BlockID blockId){
@@ -53,24 +54,35 @@ void BufferListUnPin(BufferList *bufferList,BlockID blockId){
         map_remove(bufferList->buffers, BlockIDToString(blockId));
     }
 }
-void BufferListUnpinAll(BufferList *bufferList){
-    BlockIDNode *p = bufferList->pin->next,*temp;
-    while (p){
-        Buffer * buffer = map_get(bufferList->buffers,BlockIDToString(p->blockId));
-        BufferManagerUnpin(bufferList->bufferManager,buffer);
+void BufferListUnpinAll(BufferList *bufferList) {
+    BlockIDNode *p = bufferList->pin->next, *temp;
+    while (p) {
+        Buffer *buffer = map_get(bufferList->buffers, BlockIDToString(p->blockId));
+        BufferManagerUnpin(bufferList->bufferManager, buffer);
         p = p->next;
     }
+
     p = bufferList->pin;
     BlockIDNode *q = p->next;
     p->next = NULL;
-    while(q){
-        temp=q;
-        q=q->next;
+    while (q) {
+        temp = q;
+        q = q->next;
         free(temp);
     }
+
+    // 将所有键存储到一个列表中，稍后再删除
+    const char *keys_to_remove[bufferList->buffers->base.nnodes];
+    int index = 0;
     const char *key;
-    map_iter_t iter = map_iter(&m);
+    map_iter_t iter = map_iter(&bufferList->buffers);
     while ((key = map_next(bufferList->buffers, &iter))) {
-        map_remove(bufferList->buffers,key);
+        printf("%s\n", key);
+        keys_to_remove[index++] = key;
+    }
+
+    // 从缓冲区中删除所有键
+    for (int i = 0; i < index; i++) {
+        map_remove(bufferList->buffers, keys_to_remove[i]);
     }
 }
