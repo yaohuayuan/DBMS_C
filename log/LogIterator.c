@@ -28,6 +28,13 @@ ByteBufferData *LogIteratorNext(LogIterator *logIterator){
     if(logIterator->currentPos == logIterator->fm->blockSize){
         logIterator->blockId.blockId--;
         LogIteratorMoveToBlock(logIterator);
+//        BlockID blockId;
+//        BlockID_Init(&blockId,logIterator->blockId.fileName,logIterator->blockId.blockId-1);
+//        Page *page = PageInit(400);
+//        FileManagerRead(logIterator->fm,blockId,page);
+//        ByteBufferData *byteBufferData = ByteBufferDataInit();
+//        PageGetInt(page,0,byteBufferData);
+//        int boundary=*byteBufferData->intData;
     }
     ByteBufferData* byteBufferData = PageGetBytes(logIterator->page,logIterator->currentPos);
     logIterator->currentPos += sizeof(int)+byteBufferData->bytesData->length;

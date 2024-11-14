@@ -22,7 +22,6 @@ BlockID LogManagerAppendNewBlock(LogManager* logManager){
     BlockID  blockId = FileManagerAppend(logManager->fileManager,logManager->logFile);
     PageSetInt(logManager->logPage,0,logManager->fileManager->blockSize);
     FileManagerWrite(logManager->fileManager,blockId,logManager->logPage);
-
 //    Page *p = PageInit(logManager->fileManager->blockSize);
 //    FileManagerRead(logManager->fileManager,blockId,p);
 //
@@ -39,13 +38,20 @@ int LogManagerAppend(LogManager *logManager, uint8_t *data, uint8_t *type,int si
 //    printf("Current boundary: %d\n", boundary); // 调试信息
     int byteNeeded = size + sizeof(int);
     if (boundary - byteNeeded <(int) sizeof (int)) { // the log record doesn't fit
-//        printf("Boundary too small, flushing and appending new block\n");
+
         LogManagerFlush(logManager);
-//        ByteBufferData *out = ByteBufferDataInit();
-//        PageGetInt(logManager->logPage,380,out);
         logManager->currentBlockId = LogManagerAppendNewBlock(logManager);
         PageGetInt(logManager->logPage, 0, byteBufferData);
         boundary = *byteBufferData->intData;
+//        printf("Boundary too small, flushing and appending new block\n");
+//        BlockID  blockId;
+//        BlockID_Init(&blockId,logManager->currentBlockId.fileName,0);
+//        Page *page = PageInit(400);
+//        FileManagerRead(logManager->fileManager,blockId,page);
+//        ByteBufferData *out = ByteBufferDataInit();
+//        PageGetInt(page, 0, out);
+//        PageGetInt(logManager->logPage,380,out);
+
 //        printf("New boundary after flush: %d\n", boundary); // 调试信息
     }
     int recPos = boundary - byteNeeded;
@@ -57,9 +63,15 @@ int LogManagerAppend(LogManager *logManager, uint8_t *data, uint8_t *type,int si
 }
 void LogManagerFlush(LogManager * logManager){
     FileManagerWrite(logManager->fileManager,logManager->currentBlockId,logManager->logPage);
-//    Page *p = PageInit(400);
-//    FileManagerRead(logManager->fileManager,logManager->currentBlockId,p);
     logManager->LastSavedLSN = logManager->latestLSN;
+
+    Page *page = PageInit(400);
+    BlockID blockId;
+    BlockID_Init(&blockId,logManager->currentBlockId.fileName,0);
+    FileManagerRead(logManager->fileManager,blockId,page);
+    ByteBufferData *out = ByteBufferDataInit();
+    PageGetInt(page, 0, out);
+    return;
 }
 void LogManagerFlushLSN(LogManager * logManager,int lsn){
     if (lsn >=logManager->LastSavedLSN)
