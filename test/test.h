@@ -8,6 +8,7 @@
 #include "time.h"
 #include "Layout.h"
 #include "BufferList.h"
+#include "recovery/LogRecord.h"
 void BlockTest();
 void testByteBuffer();
 #endif //DBMS_C_TEST_H

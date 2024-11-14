@@ -224,8 +224,8 @@ void testLog(){
     FileManager *fileManager= FileManagerInit("Logtest",400);
     LogManager *logManager = LogManagerInit(fileManager,fileName);
     LogPrintRecord(logManager,"The initial empty log file:");
-    LogCreateRecord(logManager,1,500);
-    LogManagerFlushLSN(logManager,500);
+    LogCreateRecord(logManager,1,10000);
+    LogManagerFlushLSN(logManager,100000);
     LogPrintRecord(logManager,"The log file now has these records:");
 }
 void testSize(){
@@ -512,6 +512,16 @@ void testLink(){
     LinkDelete(head,4);
     LinkShow(head);
 }
+void testLogManager(LogManager*logManager){
+    BlockID  blockId;
+    BlockID_Init(&blockId,logManager->currentBlockId.fileName,0);
+    Page *page = PageInit(400);
+    FileManagerRead(logManager->fileManager,blockId,page);
+    ByteBufferData *out = ByteBufferDataInit();
+    PageGetInt(page, 0, out);
+    int a = *out->intData;
+    ByteBufferData *out1 = ByteBufferDataInit();
+}
 void test_BufferList() {
     // ³õÊ¼»¯ BufferManager
     FileManager *fileManager = FileManagerInit("buffertest",400);
@@ -629,8 +639,10 @@ void testStruct() {
 
     struct tese2 {
         test1 test11;
+
     };
 }
+void testPrintRecord(char *LogName);
 void testRecoveryPrintValue(FileManager *fileManager,BlockID blockId0,BlockID blockId1,char *msg){
     printf("%s\n",msg);
     Page *page0 = PageInit(fileManager->blockSize);
@@ -638,7 +650,7 @@ void testRecoveryPrintValue(FileManager *fileManager,BlockID blockId0,BlockID bl
     FileManagerRead(fileManager,blockId1,page1);
     FileManagerRead(fileManager,blockId0,page0);
     int pos = 0;
-    for(int i=0;i<6;i++){
+    for(int i=0;i<10;i++){
         ByteBufferData *out0 = ByteBufferDataInit();
         PageGetInt(page0, pos, out0);
         ByteBufferData *out1 = ByteBufferDataInit();
@@ -646,9 +658,9 @@ void testRecoveryPrintValue(FileManager *fileManager,BlockID blockId0,BlockID bl
         printf("%d:%d %d ",i,*out0->intData,*out1->intData);
         pos+=4;
     }
-    printf("%s %s", PageGetString(page0,30), PageGetString(page1,30));
+    printf("%s %s", PageGetString(page0,100), PageGetString(page1,100));
     printf("\n");
-    
+
 }
 void testRecoveryInitialize(FileManager*fileManager,LogManager*logManager,BufferManager*bufferManager,BlockID blockId0,BlockID blockId1) {
     Transaction *tx1 = TransactionInit(fileManager,logManager,bufferManager);
@@ -656,17 +668,17 @@ void testRecoveryInitialize(FileManager*fileManager,LogManager*logManager,Buffer
     TransactionPin(tx1,blockId0);
     TransactionPin(tx2,blockId1);
     int pos = 0;
-    for(int i=0;i<6;i++){
+    for(int i=0;i<10;i++){
         TransactionSetInt(tx1,blockId0,pos,pos,false);
         TransactionSetInt(tx2,blockId1,pos,pos,false);
         pos+=sizeof(int);
     }
-    TransactionSetString(tx1,blockId0,30,"abc",false);
-    TransactionSetString(tx2,blockId1,30,"def",false);
+    TransactionSetString(tx1,blockId0,100,"abc",false);
+    TransactionSetString(tx2,blockId1,100,"def",false);
     TransactionCommit(tx1);
     TransactionCommit(tx2);
     testRecoveryPrintValue(fileManager,blockId0,blockId1,"After Initialization:");
-
+    testPrintRecord(logManager->logFile);
 }
 
 void testRecoveryModify(FileManager*fileManager,LogManager*logManager,BufferManager*bufferManager,BlockID blockId0,BlockID blockId1) {
@@ -675,13 +687,13 @@ void testRecoveryModify(FileManager*fileManager,LogManager*logManager,BufferMana
     TransactionPin(tx1,blockId0);
     TransactionPin(tx2,blockId1);
     int pos = 0;
-    for(int i=0;i<6;i++){
+    for(int i=0;i<10;i++){
         TransactionSetInt(tx1,blockId0,pos,pos+100,true);
         TransactionSetInt(tx2,blockId1,pos,pos+100,true);
         pos+=sizeof(int);
     }
-    TransactionSetString(tx1,blockId0,30,"uyw",true);
-    TransactionSetString(tx2,blockId1,30,"xyz",true);
+    TransactionSetString(tx1,blockId0,100,"uyw",true);
+    TransactionSetString(tx2,blockId1,100,"xyz",true);
     BufferManagerFlushAll(bufferManager,3);
     BufferManagerFlushAll(bufferManager,4);
 //    TransactionCommit(tx1);
@@ -704,8 +716,8 @@ void testRecovery(){
     struct tm *p;
     time(&timep);
     p = gmtime(&timep);
-//    char *fileName="12345";
-//    char *LogName="Log11";
+//    char *fileName="123456";
+//    char *LogName="test3.log";
     char LogName[512];
     sprintf(LogName,"Log_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
     char fileName[512];
@@ -719,8 +731,29 @@ void testRecovery(){
     if(FileManagerLength(fileManager,fileName)==0){
         testRecoveryInitialize(fileManager,logManager,bufferManager,blockId0,blockId1);
         testRecoveryModify(fileManager,logManager,bufferManager,blockId0,blockId1);
+        testPrintRecord(LogName);
     }else{
         testRecoveryRecover(fileManager,logManager,bufferManager,blockId0,blockId1);
+    }
+}
+void testPrintRecord(char *LogName){
+//    char *LogName="test3.log";
+    FileManager *fileManager = FileManagerInit("RecoveryTest",400);
+    LogManager *logManager = LogManagerInit(fileManager,LogName);
+    int lastBlock = FileManagerLength(fileManager,LogName)-1;
+    BlockID blockId;
+    BlockID_Init(&blockId,LogName,lastBlock);
+    Page *page = PageInit(fileManager->blockSize);
+    FileManagerRead(fileManager,blockId,page);
+    LogIterator*  logIterator = LogManager2LogManager(logManager);
+    while (LogIteratorHasNext(logIterator)){
+        ByteBufferData *byteBufferData = LogIteratorNext(logIterator);
+        ByteBuffer * buffer =bufferAllocate(byteBufferData->bytesData->length);
+        buffer->data = byteBufferData->bytesData->data;
+        buffer->type = byteBufferData->bytesData->type;
+        LogRecord *logRecord = LogRecordInit(buffer);
+        char * val = logRecord->LogRecordToString(logRecord);
+        printf("%s\n",val);
     }
 }
 int main() {
@@ -749,5 +782,6 @@ int main() {
     //TestFunction();
     //testStruct();
     testRecovery();
+
     return 0;
 }
