@@ -8,8 +8,8 @@ Buffer * BufferInit(FileManager *fileManager,LogManager *logManager){
     buffer->pins = 0;
     buffer->lsn = -1;
     buffer->txNum = -1;
-    buffer->fileManager = FileManagerInit(fileManager->dbDirectoryName,fileManager->blockSize);
-    buffer->logManager = LogManagerInit(logManager->fileManager,logManager->logFile);
+    buffer->fileManager = fileManager;
+    buffer->logManager = logManager;
     buffer->page = PageInit(fileManager->blockSize);
     BlockID_Init(&buffer->blockId,NULL,-1);
     return buffer;
