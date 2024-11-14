@@ -18,6 +18,13 @@ void RecoveryCommit(RecoveryManager *recoveryManager){
     LogManagerFlushLSN(recoveryManager->logManager,lsn);
 }
 void RecoveryDoRollback(RecoveryManager*recoveryManager){
+//            BlockID blockId;
+//        BlockID_Init(&blockId,recoveryManager->logManager->currentBlockId.fileName,0);
+//        Page *page = PageInit(400);
+//        FileManagerRead(recoveryManager->logManager->fileManager,blockId,page);
+//        ByteBufferData *byteBufferData = ByteBufferDataInit();
+//        PageGetInt(page,0,byteBufferData);
+//        int boundary=*byteBufferData->intData;
     LogIterator *logIterator = LogManager2LogManager(recoveryManager->logManager);
     while (LogIteratorHasNext(logIterator)){
        ByteBufferData*byteBufferData= LogIteratorNext(logIterator);
