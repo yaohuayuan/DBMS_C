@@ -15,7 +15,8 @@ RollbackRecord* RollbackRecordInit(Page *page){
 LogRecordCode RollbackRecordOP(Transaction*transaction){
     return LogRecordCode_ROLLBACK;
 }
-char* RollbackRecordToString(RollbackRecord *rollbackRecord){
+char* RollbackRecordToString(LogRecord *logRecord){
+    RollbackRecord *rollbackRecord = logRecord->LogRecordData.rollbackRecord;
     char *str = NULL;
     sprintf(str,"<ROLLBACK %d >",rollbackRecord->TxNum);
     return str;
@@ -44,7 +45,8 @@ LogRecordCode StartRecordOP(){
 int StartRecordTxNumber(LogRecord *logRecord ){
     return logRecord->LogRecordData.startRecord->TxNum;
 }
-char * StartRecordTostring(StartRecord *startRecord){
+char * StartRecordTostring(LogRecord*logRecord){
+    StartRecord *startRecord = logRecord->LogRecordData.startRecord;
     char *str = NULL;
     sprintf(str,"<START %d >",startRecord->TxNum);
     return str;
@@ -54,7 +56,7 @@ int StartRecordWriteToLog(LogManager *logManager,int txNum){
     Page *page = PageInit(2*sizeof (int));
     PageSetInt(page,0,LogRecordCode_START);
     PageSetInt(page,sizeof (int),txNum);
-    return LogManagerAppend(logManager,page->buffer->data,page->buffer->type,page->buffer->size);
+    return LogManagerAppend(logManager,page->buffer->data,page->buffer->type,2*sizeof (int));
 }
 SetStringRecord* SetStringRecordInit(Page* page) {
     SetStringRecord* record = malloc(sizeof(SetStringRecord));
@@ -90,7 +92,8 @@ LogRecordCode CommitRecordOP(){
     return LogRecordCode_COMMIT;
 }
 void CommitUnDo(Transaction*transaction,LogRecord*logRecord){}
-char* CommitRecordToString(CommitRecord* commitRecord) {
+char * CommitRecordToString(LogRecord *logRecord) {
+    CommitRecord* commitRecord = logRecord->LogRecordData.commitRecord;
     char* str = malloc(50 * sizeof(char));
     sprintf(str, "<COMMIT %d>", commitRecord->TxNum);
     return str;
@@ -101,7 +104,7 @@ int CommitRecordWriteToLog(LogManager* logManager, int txNum) {
     Page* page = PageInit(2 * sizeof(int));
     PageSetInt(page, 0, LogRecordCode_COMMIT);
     PageSetInt(page, sizeof(int), txNum);
-    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
+    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, 2 * sizeof(int));
 }
 int CommitRecordTxNumber(LogRecord *logRecord){
     return logRecord->LogRecordData.commitRecord->TxNum;
@@ -134,7 +137,8 @@ LogRecordCode SetIntRecordOP() {
 }
 
 // SetIntRecord 转换为字符串
-char* SetIntRecordToString(SetIntRecord* setIntRecord) {
+char* SetIntRecordToString(LogRecord *logRecord) {
+    SetIntRecord *setIntRecord = logRecord->LogRecordData.setIntRecord;
     char* str = malloc(100 * sizeof(char));
     sprintf(str, "<SETINT %d %s %d %d %d>", setIntRecord->TxNum, setIntRecord->BlockId.fileName, setIntRecord->BlockId.blockId, setIntRecord->Offset, setIntRecord->Val);
     return str;
@@ -155,7 +159,7 @@ int SetIntRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId, i
     PageSetInt(page, bpos, blockId.blockId);
     PageSetInt(page, opos, offset);
     PageSetInt(page, vpos, val);
-    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
+    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, recLen);
 }
 void SetIntUndo(Transaction*transaction,LogRecord*logRecord){
     SetIntRecord *setIntRecord = logRecord->LogRecordData.setIntRecord;
@@ -181,7 +185,7 @@ int CheckpointRecordTxNumber() {
 }
 void CheckpointUnDo(Transaction*transaction,LogRecord*logRecord){}
 // CheckpointRecord 转换为字符串
-char* CheckpointRecordToString(CheckpointRecord* checkpointRecord) {
+char* CheckpointRecordToString(LogRecord *logRecord) {
     char* str = malloc(50 * sizeof(char));
     sprintf(str, "<CHECKPOINT>");
     return str;
@@ -193,7 +197,7 @@ int CheckpointRecordWriteToLog(LogManager* logManager) {
     Page* page = PageInit(sizeof(int)); // 只存储一个整数（操作码）
     PageSetInt(page, 0, LogRecordCode_CHECKPOINT); // 设置操作码为 CHECKPOINT
     // 将日志写入到日志管理器并返回最后的 LSN
-    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
+    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, sizeof (int));
 }
 // 操作码
 LogRecordCode SetStringRecordOP() {
@@ -222,10 +226,11 @@ int SetStringRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId
     PageSetInt(page, bpos, blockId.blockId);
     PageSetInt(page, opos, offset);
     PageSetString(page, vpos, val);
-    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type, page->buffer->size);
+    return LogManagerAppend(logManager, page->buffer->data, page->buffer->type,recLen);
 }
 // 生成字符串表示
-char* SetStringRecordToString(SetStringRecord* record) {
+char* SetStringRecordToString(LogRecord *logRecord) {
+    SetStringRecord *record = logRecord->LogRecordData.setStringRecord;
     char* str = malloc(1024 * sizeof(char));  // 分配足够空间
     sprintf(str, "<SETSTRING %d %s %d %s>", record->TxNum, BlockIDToString(record->BlockId), record->Offset, record->Val);
     return str;
@@ -244,6 +249,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->LogRecordOP = CommitRecordOP;
             logRecord->LogRecordUnDo=CommitUnDo;
             logRecord->LogRecordTxNum = CommitRecordTxNumber;
+            logRecord->LogRecordToString = CommitRecordToString;
             return logRecord;
         case LogRecordCode_CHECKPOINT:
             logRecord->LogRecordData.checkpointRecord = CheckpointRecordInit(page);
@@ -251,6 +257,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->LogRecordOP = CheckpointRecordOP;
             logRecord->LogRecordTxNum = CheckpointRecordTxNumber;
             logRecord->LogRecordUnDo = CheckpointUnDo;
+            logRecord->LogRecordToString = CheckpointRecordToString;
             return logRecord;
         case LogRecordCode_START:
             logRecord->LogRecordUnDo = StartRecordUnDo;
@@ -258,6 +265,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->LogRecordOP = StartRecordOP;
             logRecord->logRecordCode = LogRecordCode_START;
             logRecord->LogRecordData.startRecord= StartRecordInit(page);
+            logRecord->LogRecordToString = StartRecordTostring;
             return logRecord;
         case LogRecordCode_ROLLBACK:
             logRecord->LogRecordData.rollbackRecord = RollbackRecordInit(page);
@@ -265,6 +273,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->LogRecordOP = RollbackRecordOP;
             logRecord->LogRecordTxNum = RollbackRecordTxNumber;
             logRecord->LogRecordUnDo = RollbackRecordUnDo;
+            logRecord->LogRecordToString = RollbackRecordToString;
             return logRecord;
         case LogRecordCode_SETINT:
             logRecord->LogRecordData.setIntRecord = SetIntRecordInit(page);
@@ -272,6 +281,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->logRecordCode = LogRecordCode_SETINT;
             logRecord->LogRecordOP = SetIntRecordOP;
             logRecord->LogRecordTxNum = SetIntTxNumber;
+            logRecord->LogRecordToString = SetIntRecordToString;
             return logRecord;
         case LogRecordCode_SETSTRING:
             logRecord->LogRecordData.setStringRecord = SetStringRecordInit(page);
@@ -279,6 +289,7 @@ LogRecord * LogRecordInit(ByteBuffer* buffer){
             logRecord->logRecordCode = LogRecordCode_SETSTRING;
             logRecord->LogRecordOP = SetStringRecordOP;
             logRecord->LogRecordTxNum = SetStringTxNumber;
+            logRecord->LogRecordToString = SetStringRecordToString;
             return logRecord;
     }
 }
