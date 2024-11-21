@@ -547,3 +547,60 @@ BlockID BloCKIDString2BlockID(char * str){
 ```
 #### tx
 这里都是事务 编写了LockTable也就是x锁s锁 以及对其进行管理的ConCurrencyManager 还有BufferList缓冲池
+
+## 11月
+### 14号
+在编写事务的时候发现map buffer怎么样都不对，在bufferManager中
+
+![buffer在bufferManager中.png](IMG/buffer在bufferManager中.png)
+
+但是在Map得到后为：
+
+![buffer在bufferManager中.png](IMG/buffer在Map得到后.png)uffer在bufferM中.png)
+
+也就是说Map是值拷贝，所以BufferList修改为：
+```c
+typedef struct BlockIDNode{
+    BlockID blockId;
+    struct BlockIDNode* next;
+}BlockIDNode;
+typedef struct BufferTEMP{
+    Buffer *buffer;
+}BufferTEMP;
+typedef  map_t(BufferTEMP) map_Buffer_t;
+typedef struct BufferList{
+    map_Buffer_t *buffers;
+    BlockIDNode *pin;
+    BufferManager *bufferManager;
+}BufferList;
+```
+
+然后Log写一直有问题,查了好久得到为:(更新好的)
+```c
+Buffer * BufferInit(FileManager *fileManager,LogManager *logManager){
+    Buffer *buffer = malloc(sizeof (Buffer));
+    buffer->pins = 0;
+    buffer->lsn = -1;
+    buffer->txNum = -1;
+    buffer->fileManager = fileManager;
+    buffer->logManager = logManager;
+    buffer->page = PageInit(fileManager->blockSize);
+    BlockID_Init(&buffer->blockId,NULL,-1);
+    return buffer;
+}
+```
+之前为:
+```c
+Buffer * BufferInit(FileManager *fileManager,LogManager *logManager){
+    Buffer *buffer = malloc(sizeof (Buffer));
+    buffer->pins = 0;
+    buffer->lsn = -1;
+    buffer->txNum = -1;
+    buffer->fileManager = 初始函数;
+    buffer->logManager = 初始函数;
+    buffer->page = PageInit(fileManager->blockSize);
+    BlockID_Init(&buffer->blockId,NULL,-1);
+    return buffer;
+}
+```
+导致重新加载把某一块清空.

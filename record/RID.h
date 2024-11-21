@@ -12,4 +12,7 @@ typedef struct RID{
     int BlockNum;
     int Slot;
 }RID;
+RID* RIDInit(int BlockNum,int Slot);
+bool RIDEqual(RID *rid1,RID *rid2);
+char *RIDToString(RID*rid);
 #endif //DBMS_C_RID_H

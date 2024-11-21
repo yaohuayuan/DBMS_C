@@ -30,7 +30,7 @@ Layout * LayoutInit(Schema*schema,map_int_t* mapInt,int SloSize ){
             printf("%d\n",*value);
             fieldNode=fieldNode->next;
         }
-
+        layout->SlotSize = pos;
     }
 
     return layout;

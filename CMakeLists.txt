@@ -21,7 +21,7 @@ set(HEAD_SOURCES
         head/ByteBuffer.c
         head/Error.c
         head/map.c
-        head/List.c head/List.h)
+        head/List.c head/List.h head/Trie.c head/Trie.h head/StreamTokenizer.c head/StreamTokenizer.h)
 
 set(TEST_SOURCES
         test/test.c
@@ -41,7 +41,7 @@ set(RECORD_SOURCES
         record/Schema.c
         record/Layout.c
         record/RID.c
-        )
+        record/RecordPage.c record/RecordPage.h record/TableScan.c record/TableScan.h)
 
 set(TX_SOURCES
         tx/BufferList.c
@@ -50,6 +50,22 @@ set(TX_SOURCES
         tx/recovery/LogRecord.c
         tx/recovery/RecoveryManager.c tx/recovery/RecoveryManager.h tx/Transaction.c tx/Transaction.h)
 
+set(QUERY_SOURCE
+
+
+        query/Constant.c query/Constant.h query/Expression.c query/Expression.h query/Scan.c query/Scan.h query/UpdateScan.c query/UpdateScan.h query/ProjectScan.c query/ProjectScan.h query/ProductScan.c query/ProductScan.h)
+set(METADATA_SOURCE
+        metadata/TableManager.c metadata/TableManager.h
+        metadata/ViewManager.c metadata/ViewManager.h metadata/StatInfo.c metadata/StatInfo.h metadata/StartManager.c metadata/StartManager.h)
+set(INDEX_SOURCE
+
+)
+set(PLAN_SOURCE
+
+)
+set(PARSE_SOURCE
+
+        parse/Lexer.c parse/Lexer.h)
 # 将所有源文件放入一个变量中，方便管理
 set(SOURCE_FILES
         ${FILE_SOURCES}
@@ -59,7 +75,11 @@ set(SOURCE_FILES
         ${BUFFER_SOURCES}
         ${RECORD_SOURCES}
         ${TX_SOURCES}
-        )
+        ${METADATA_SOURCE}
+#        ${QUERY_SOURCE}
+        ${PLAN_SOURCE}
+        ${PARSE_SOURCE}
+      )
 
 # 定义可执行文件
 add_executable(DBMS_C_EXEC ${SOURCE_FILES})
@@ -73,4 +93,9 @@ target_include_directories(DBMS_C_EXEC PRIVATE
         buffer
         record
         tx
+        query
+        metadata
+        plan
+        index
+        parse
         )

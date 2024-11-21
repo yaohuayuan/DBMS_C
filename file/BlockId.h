@@ -13,7 +13,7 @@ typedef struct {
     int blockId;
 }BlockID;
 // 初始化BlockID
-void BlockID_Init(BlockID *b,char * name,int id);
+void BlockID_Init(BlockID *b,const char * name,int id);
 char * getFileName(BlockID b);
 int getBlockId(BlockID);
 char * BlockIDToString(BlockID);

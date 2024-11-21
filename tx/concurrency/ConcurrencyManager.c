@@ -11,7 +11,10 @@ ConCurrencyManager * ConCurrencyManagerInit(){
     return conCurrencyManager;
 }
 void ConCurrencyManagerSLock(ConCurrencyManager *conCurrencyManager,BlockID blockId){
-    char** value = map_get(conCurrencyManager->mapStr,BlockIDToString(blockId));
+    BlockID blockId1;
+    BlockID_Init(&blockId1,blockId.fileName,blockId.blockId);
+    char * key = BlockIDToString(blockId1);
+    char** value = map_get(conCurrencyManager->mapStr,key);
     Error *error = ErrorInit();
     if(value==NULL){
         LockTableSLock(conCurrencyManager->lockTable,blockId,error);

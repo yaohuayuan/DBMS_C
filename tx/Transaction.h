@@ -28,7 +28,7 @@ int TransactionGetInt(Transaction*transaction,BlockID blockId,int offset);
 char *TransactionGetString(Transaction*transaction,BlockID blockId,int offset);
 void TransactionSetInt(Transaction*transaction,BlockID blockId,int offset,int val,bool okToLog);
 void TransactionSetString(Transaction*transaction,BlockID blockId,int offset,char* val,bool okToLog);
-int TransactionSize(Transaction *transaction,char *fileName);
+int TransactionSize(Transaction *transaction,const char *fileName);
 BlockID TransactionAppend(Transaction *transaction,char*fileName);
 int TransactionBlockSize(Transaction*transaction);
 int TransactionAvailableBuffs(Transaction*transaction);

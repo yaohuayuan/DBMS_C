@@ -4,8 +4,10 @@
 #include <stdlib.h>
 #include "BlockId.h"
 
-void BlockID_Init(BlockID *b,char *name,int id){
-    b->fileName = name;
+void BlockID_Init(BlockID *b,const char * name,int id) {
+    size_t length = strlen(name) + 1; // 包括 '\0' 的长度
+    b->fileName = malloc(length*sizeof(char));    // 动态分配内存
+    b->fileName = strdup(name); // 复制字符串
     b->blockId = id;
 }
 char * getFileName(BlockID b){
@@ -18,12 +20,12 @@ char* BlockIDToString(BlockID b) {
     char *str = malloc(256); // 分配足够的内存
     if (str == NULL)
         return NULL; // 检查分配是否成功
-    snprintf(str, 256, "This BlockID is file: %s, ID: %d", getFileName(b), b.blockId);
+    snprintf(str, 256, "This BlockID is file: %s, ID: %d", b.fileName, b.blockId);
     return str;
 }
 
 bool BlockIdEqual(BlockID b1,BlockID b2){
-    return (b1.fileName == b2.fileName) && (b1.blockId == b2.blockId);
+    return (strcmp(b1.fileName, b2.fileName) == 0) && (b1.blockId == b2.blockId);
 }
 BlockID BloCKIDString2BlockID(char * str){
     BlockID blockId = {NULL, 0};

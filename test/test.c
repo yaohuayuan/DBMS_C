@@ -6,6 +6,7 @@
 #include "map.h"
 #include "Schema.h"
 #include "Transaction.h"
+#include "Trie.h"
 // 测试 BlockID 功能
 void BlockTest() {
     BlockID id1, id2, id3;
@@ -650,7 +651,7 @@ void testRecoveryPrintValue(FileManager *fileManager,BlockID blockId0,BlockID bl
     FileManagerRead(fileManager,blockId1,page1);
     FileManagerRead(fileManager,blockId0,page0);
     int pos = 0;
-    for(int i=0;i<10;i++){
+    for(int i=0;i<6;i++){
         ByteBufferData *out0 = ByteBufferDataInit();
         PageGetInt(page0, pos, out0);
         ByteBufferData *out1 = ByteBufferDataInit();
@@ -668,7 +669,7 @@ void testRecoveryInitialize(FileManager*fileManager,LogManager*logManager,Buffer
     TransactionPin(tx1,blockId0);
     TransactionPin(tx2,blockId1);
     int pos = 0;
-    for(int i=0;i<10;i++){
+    for(int i=0;i<6;i++){
         TransactionSetInt(tx1,blockId0,pos,pos,false);
         TransactionSetInt(tx2,blockId1,pos,pos,false);
         pos+=sizeof(int);
@@ -687,7 +688,7 @@ void testRecoveryModify(FileManager*fileManager,LogManager*logManager,BufferMana
     TransactionPin(tx1,blockId0);
     TransactionPin(tx2,blockId1);
     int pos = 0;
-    for(int i=0;i<10;i++){
+    for(int i=0;i<6;i++){
         TransactionSetInt(tx1,blockId0,pos,pos+100,true);
         TransactionSetInt(tx2,blockId1,pos,pos+100,true);
         pos+=sizeof(int);
@@ -716,12 +717,12 @@ void testRecovery(){
     struct tm *p;
     time(&timep);
     p = gmtime(&timep);
-//    char *fileName="123456";
-//    char *LogName="test3.log";
-    char LogName[512];
-    sprintf(LogName,"Log_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
-    char fileName[512];
-    sprintf(fileName,"Text_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+    char *fileName="1234567";
+    char *LogName="test6.log";
+//    char LogName[512];
+//    sprintf(LogName,"Log_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+//    char fileName[512];
+//    sprintf(fileName,"Text_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
     FileManager *fileManager = FileManagerInit("RecoveryTest",400);
     LogManager *logManager = LogManagerInit(fileManager,LogName);
     BufferManager *bufferManager = BufferManagerInit(fileManager,logManager,3);
@@ -756,6 +757,218 @@ void testPrintRecord(char *LogName){
         printf("%s\n",val);
     }
 }
+void testTX(){
+    time_t timep;
+    struct tm *p;
+    time(&timep);
+    p = gmtime(&timep);
+    char *fileName="1234567";
+    char *LogName="test.log";
+//    char LogName[512];
+//    sprintf(LogName,"Log_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+//    char fileName[512];
+//    sprintf(fileName,"Text_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+    FileManager *fileManager = FileManagerInit("TXTest",400);
+    LogManager *logManager = LogManagerInit(fileManager,LogName);
+    BufferManager *bufferManager = BufferManagerInit(fileManager,logManager,8);
+    Transaction *tx1 = TransactionInit(fileManager,logManager,bufferManager);
+    BlockID blockId;
+    BlockID_Init(&blockId,"testfile",1);
+    TransactionPin(tx1,blockId);
+    TransactionSetInt(tx1,blockId,80,1,false);
+    TransactionSetString(tx1,blockId,40,"one",false);
+    TransactionCommit(tx1);
+    Transaction *tx2 = TransactionInit(fileManager,logManager,bufferManager);
+    TransactionPin(tx2,blockId);
+    int IVal = TransactionGetInt(tx2,blockId,80);
+    char * SVal = TransactionGetString(tx2,blockId,40);
+    printf("%d %s\n",IVal,SVal);
+    Transaction *tx3 = TransactionInit(fileManager,logManager,bufferManager);
+    TransactionPin(tx3,blockId);
+    TransactionSetInt(tx3,blockId,80,2,false);
+    TransactionRollback(tx3);
+    Transaction *tx4 = TransactionInit(fileManager,logManager,bufferManager);
+    TransactionPin(tx4,blockId);
+    int IVal1 = TransactionGetInt(tx4,blockId,80);
+    char * SVal1 = TransactionGetString(tx4,blockId,40);
+    printf("%d %s\n",IVal1,SVal1);
+}
+int getRandomInt(int max) {
+    return rand() % (max + 1);
+}
+
+void TableScanTest() {
+    time_t timep;
+    struct tm *p;
+    time(&timep);
+    p = gmtime(&timep);
+    char *fileName="1234567";
+    char *LogName="test.log";
+//    char *TableName = "T";
+//    char LogName[512];
+//    sprintf(LogName,"Log_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+//    char fileName[512];
+//    sprintf(fileName,"Text_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+    char TableName [512];
+    sprintf(TableName,"Table_%d_%d_%d_%d_%d_%d",p->tm_year+1900,p->tm_mon+1,p->tm_mday,p->tm_hour,p->tm_min,p->tm_sec);
+    FileManager *fileManager = FileManagerInit("TableTest",400);
+    LogManager *logManager = LogManagerInit(fileManager,LogName);
+    BufferManager *bufferManager = BufferManagerInit(fileManager,logManager,8);
+    Transaction *tx = TransactionInit(fileManager,logManager,bufferManager);
+    Schema *schema = SchemaInit();
+    SchemaAddIntField(schema,"A");
+    SchemaAddStringField(schema,"B",9);
+    Layout *layout = LayoutInit(schema,NULL,0);
+    FieldNode* fieldNodeHead = layout->schema->fields;
+    while(fieldNodeHead){
+        int offset = LayoutOffset(layout,fieldNodeHead->fileName);
+        printf("%s:%d\n",fieldNodeHead->fileName,offset);
+        fieldNodeHead = fieldNodeHead->next;
+    }
+    printf("Filling the table with 50 random records.\n");
+    TableScan *tableScan = TableScanInit(tx,TableName,layout);
+    for(int i=0;i<50;i++){
+        TableScanInsert(tableScan);
+        int n = (int)getRandomInt(50);
+        TableScanSetInt(tableScan,"A",n);
+        char string[256];
+        sprintf(string,"rec%d",n);
+        TableScanSetString(tableScan,"B",string);
+        printf("inserting into slot %s :%d +%s\n",RIDToString(TableScanGetRID(tableScan)),n,string);
+
+    }
+    printf("Deleting these records, whose A-values are less than 25.\n");
+    int count = 0;
+    TableScanBeforeFirst(tableScan);
+    while (TableScanNext(tableScan)){
+        int a = TableScanGetInt(tableScan,"A");
+        char * b = TableScanGetString(tableScan,"B");
+        if(a<25){
+            count++;
+            printf("slot %s:{%d,%s}\n",RIDToString(TableScanGetRID(tableScan)),a,b);
+            TableScanDelete(tableScan);
+        }
+    }
+    printf("%d, values under 10 were deleted.\n",count);
+    printf("Here are the remaining records.\n");
+    TableScanBeforeFirst(tableScan);
+    while (TableScanNext(tableScan)){
+        int a = TableScanGetInt(tableScan,"A");
+        char * b = TableScanGetString(tableScan,"B");
+        printf("slot %s:{%d,%s}\n",RIDToString(TableScanGetRID(tableScan)),a,b);
+    }
+    TableScanClose(tableScan);
+    TransactionCommit(tx);
+}
+void TestStreamTokenizer() {
+    // 输入测试字符串
+    char input[] = "SELECT name, age FROM users WHERE_132 age > 25 AND status = '1active'";
+
+    // 初始化 StreamTokenizer
+    StreamTokenizer *tokenizer = StreamTokenizerInit(input);
+    if (!tokenizer) {
+        printf("Failed to initialize StreamTokenizer.\n");
+        return;
+    }
+
+    // 设置为小写模式（可选）
+    StreamTokenizerLowerCaseMode(tokenizer);
+    StreamTokenizerWordChars(tokenizer,'_','_');
+    // 准备解析
+    StreamTokenizerSearchReady(tokenizer);
+
+    // 输出解析结果
+    printf("Tokenization result for: \"%s\"\n", input);
+    while (tokenizer->type != TOKEN_END_OF) {
+        StreamTokenizerNext(tokenizer);
+
+        // 根据类型输出结果
+        switch (tokenizer->type) {
+            case TOKEN_WORD:
+                printf("TOKEN_WORD: %s\n", tokenizer->sValue);
+                break;
+            case TOKEN_INT_CONSTANT:
+                printf("TOKEN_INT_CONSTANT: %lf\n", tokenizer->iValue);
+                break;
+            case TOKEN_DELIM:
+                printf("TOKEN_DELIM: %s\n", tokenizer->sValue);
+                break;
+            case TOKEN_UNKNOWN:
+                printf("TOKEN_UNKNOWN: %s\n", tokenizer->sValue);
+                break;
+            case TOKEN_END_OF:
+                printf("TOKEN_END_OF\n");
+                break;
+            default:
+                printf("UNKNOWN TOKEN TYPE\n");
+                break;
+        }
+    }
+
+}
+void testTrie(){
+    Trie *root = TrieInit();
+
+    // 插入单词
+    TrieInsert(root, "hello");
+    TrieInsert(root, "world");
+    TrieInsert(root, "trie");
+    TrieInsert(root, "data");
+    TrieInsert(root, "structure");
+
+    // 测试查找功能
+    printf("Search for 'hello': %s\n", TrieSearchIn(root, "hello") ? "Found" : "Not Found");
+    printf("Search for 'world': %s\n", TrieSearchIn(root, "world") ? "Found" : "Not Found");
+    printf("Search for 'trie': %s\n", TrieSearchIn(root, "trie") ? "Found" : "Not Found");
+    printf("Search for 'data': %s\n", TrieSearchIn(root, "data") ? "Found" : "Not Found");
+    printf("Search for 'structure': %s\n", TrieSearchIn(root, "structure") ? "Found" : "Not Found");
+    printf("Search for 'algorithm': %s\n", TrieSearchIn(root, "algorithm") ? "Found" : "Not Found");
+
+
+}
+void testLexer(){
+
+    printf("Enter SQL expressions (e.g., id = 123 or 123 = id). Type 'exit' to quit.\n");
+
+    while (1) {
+        printf("SQL> ");
+        char input[256]="id=123";
+        // 移除换行符
+        size_t len = strlen(input);
+        if (len > 0 && input[len - 1] == '\n') {
+            input[len - 1] = '\0';
+        }
+
+        // 检查是否退出
+        if (strcmp(input, "exit") == 0) {
+            break;
+        }
+
+        // 初始化 Lexer
+        Lexer *lexer = LexerInit(input);
+
+        // 解析输入
+        char *x = NULL;
+        double y = 0;
+        StreamTokenizerNext(lexer->tokenizer);
+        if (LexerMatchId(lexer)) {
+            x = LexerEatIDConstant(lexer); // 获取标识符
+            LexerEatDelim(lexer);     // 检查 '='
+            y = LexerEatIntConstant(lexer); // 获取整数
+        } else if (LexerMathIntConstant(lexer)) {
+            y = LexerEatIntConstant(lexer); // 获取整数
+            LexerEatDelim(lexer);     // 检查 '='
+            x = LexerEatIDConstant(lexer); // 获取标识符
+        } else {
+            printf("Syntax error: invalid input.\n");
+            free(lexer);
+            continue;
+        }
+
+        printf("%s equals %lf\n", x, y);
+        free(lexer); // 释放 Lexer 资源
+    }
+}
 int main() {
 //    BlockTest();
 //testByteBuffer();
@@ -781,7 +994,11 @@ int main() {
     //testBlockIDConversion();
     //TestFunction();
     //testStruct();
-    testRecovery();
-
+    //testRecovery();
+    //testTX();
+    //TableScanTest();
+    //TestStreamTokenizer();
+    //testTrie();
+    testLexer();
     return 0;
 }

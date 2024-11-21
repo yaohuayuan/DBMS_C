@@ -11,7 +11,7 @@ Buffer * BufferInit(FileManager *fileManager,LogManager *logManager){
     buffer->fileManager = fileManager;
     buffer->logManager = logManager;
     buffer->page = PageInit(fileManager->blockSize);
-    BlockID_Init(&buffer->blockId,NULL,-1);
+    BlockID_Init(&buffer->blockId,"",-1);
     return buffer;
 }
 void BufferSetModified(Buffer *buffer, int txNum,int lsn){

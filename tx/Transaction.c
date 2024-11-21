@@ -33,7 +33,7 @@ void TransactionRollback(Transaction*transaction){
 }
 void TransactionRecover(Transaction*transaction){
     BufferManagerFlushAll(transaction->bufferManager,transaction->txNum);
-    RecoveryDoRecover(transaction->recoveryManager);
+    RecoveryRecovery(transaction->recoveryManager);
 }
 void TransactionPin(Transaction *transaction,BlockID blockId){
     BufferListPin(transaction->bufferList,blockId);
@@ -44,7 +44,7 @@ void TransactionUnPin(Transaction *transaction,BlockID blockId){
 int TransactionGetInt(Transaction*transaction,BlockID blockId,int offset){
     ConCurrencyManagerSLock(transaction->conCurrencyManager,blockId);
     Buffer *buffer = BufferListGetBuffer(transaction->bufferList,blockId);
-    ByteBufferData *out = NULL;
+    ByteBufferData *out = ByteBufferDataInit();
     PageGetInt(buffer->page, offset, out);
     return  *out->intData;
 }
@@ -76,7 +76,7 @@ void TransactionSetString(Transaction*transaction,BlockID blockId,int offset,cha
     PageSetString(page,offset,val);
     BufferSetModified(buffer,transaction->txNum,lsn);
 }
-int TransactionSize(Transaction *transaction,char *fileName){
+int TransactionSize(Transaction *transaction,const char *fileName){
     BlockID blockId;
     BlockID_Init(&blockId,fileName,Transaction_END_OF_FILE);
     ConCurrencyManagerSLock(transaction->conCurrencyManager,blockId);

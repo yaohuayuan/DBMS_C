@@ -51,6 +51,6 @@ void LockTableSLock(LockTable*lockTable,BlockID blockId,Error *error){
         error->errorCode = Error_HasXLock;
         error->reason = "LockTable has X Lock";
     }
-    int *val = map_get(lockTable->Locks,BlockIDToString(blockId));
-    map_set(lockTable->Locks,BlockIDToString(blockId),*val+1);
+    int val = LockTableGetLocalVal(lockTable,blockId);
+    map_set(lockTable->Locks,BlockIDToString(blockId),val+1);
 }

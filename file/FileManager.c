@@ -38,7 +38,7 @@ void OpenFileAdd(OpenFile *head,const char *fileName){
     FILE *file_type = fopen(str,"rb+");
     newOpenFile->file->File_Data=file;
     newOpenFile->file->File_Type=file_type;
-    newOpenFile->fileName=fileName;
+    newOpenFile->fileName= strdup(fileName);
     newOpenFile->next=NULL;
     q->next = newOpenFile;
 }
@@ -185,8 +185,8 @@ int FileManagerLength(FileManager *fm,char *filename){
     FileSet *fileSet = GetFile(fm,filename);
     FILE *f = fileSet->File_Data;
     fseek(f, 0, SEEK_END);
-    int data = (int)ftell(f);
-//    printf("%d", (int)ftell(f));
+//    int data = (int)(ftell(f)/fm->blockSize);
+//    printf("%d", data);
     return (int)(ftell(f)/fm->blockSize);
 }
 BlockID FileManagerAppend(FileManager *fm,char *filename){
