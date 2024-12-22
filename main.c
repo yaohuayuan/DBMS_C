@@ -86,7 +86,7 @@ int main() {
             TransactionRollback(transaction);
             transaction = SimpleDataNewTX(DBMS);
             TransactionManagerAdd(transactionManager,transaction);
-        }else if(strncmp(cmd, "START_TRANSACTION", 17) == 0){
+        }else if(strncmp(cmd, "START_NEW_TRANSACTION", 21) == 0){
             transaction = SimpleDataNewTX(DBMS);
             TransactionManagerAdd(transactionManager,transaction);
         }else if (strncmp(cmd, "SWITCH", 6) == 0 || strncmp(cmd, "switch", 6) == 0) {

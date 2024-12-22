@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "TransactionManager.h"
 
 // 初始化事务管理器
 TransactionManager* TransactionManagerInit() {
@@ -20,18 +19,15 @@ TransactionManager* TransactionManagerInit() {
 char *int2str(int num){
     char *str;
     int length;
+    length = snprintf(NULL, 0, "%d", num);
 
-    // 计算数字的长度，估算需要的字符数
-    length = snprintf(NULL, 0, "%d", num);  // 返回需要的字符数，不包含 '\0'
-
-    str = malloc(length + 1);  // +1 为了 '\0' 字符结束符
+    str = malloc(length + 1);
 
     if (str == NULL) {
         printf("Memory allocation failed.\n");
         return NULL;
     }
 
-    // 使用 sprintf 将整数转为字符串
     sprintf(str, "%d", num);
     return str;
 }
