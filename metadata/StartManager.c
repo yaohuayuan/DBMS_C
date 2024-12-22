@@ -20,16 +20,14 @@ StartManager* StartManagerInit(TableManager *tblMgr, Transaction *tx) {
 }
 
 // 获取表的统计信息
-StatInfo* StartManagerGetStatInfo(StartManager *sm, const char *tblname, Layout *layout, Transaction *tx) {
+StatInfo* StartManagerGetStatInfo(StartManager *sm, char *tblname, Layout *layout, Transaction *tx) {
     sm->numcalls++;
     if (sm->numcalls > 100) {
         StartManagerRefreshStatistics(sm, tx);
     }
     StatInfo *si = NULL;
-    map_get(sm->tablestats, tblname);
-    if (sm->tablestats->ref != NULL) {
-        si = (StatInfo*)sm->tablestats->ref;
-    } else {
+    si=map_get(sm->tablestats, tblname);
+    if (si== NULL) {
         si = StartManagerCalcTableStats(sm, tblname, layout, tx);
         map_set(sm->tablestats, tblname, *si);
     }
@@ -43,9 +41,11 @@ void StartManagerRefreshStatistics(StartManager *sm, Transaction *tx) {
     map_init(sm->tablestats);
     sm->numcalls = 0;
     Layout *tcatlayout = TableManagerGetLayout(sm->tblMgr, "tblcat", tx);
-    TableScan *tcat = TableScanInit(tx, "tblcat", tcatlayout);
+    TableScan *t = TableScanInit(tx, "tblcat", tcatlayout);
+    Scan*tcat = ScanInit(t,SCAN_TABLE_CODE);
     while (TableScanNext(tcat)) {
-        const char *tblname = TableScanGetString(tcat, "tblname");
+        char *tblname = TableScanGetString(tcat, "tblname");
+//        printf("%s\n",tblname);
         Layout *layout = TableManagerGetLayout(sm->tblMgr, tblname, tx);
         StatInfo *si = StartManagerCalcTableStats(sm, tblname, layout, tx);
         map_set(sm->tablestats, tblname, *si);
@@ -54,10 +54,11 @@ void StartManagerRefreshStatistics(StartManager *sm, Transaction *tx) {
 }
 
 // 计算单个表的统计信息
-StatInfo* StartManagerCalcTableStats(StartManager *sm, const char *tblname, Layout *layout, Transaction *tx) {
+StatInfo* StartManagerCalcTableStats(StartManager *sm,  char *tblname, Layout *layout, Transaction *tx) {
     int numRecs = 0;
     int numblocks = 0;
-    TableScan *ts = TableScanInit(tx, tblname, layout);
+    TableScan *t = TableScanInit(tx, tblname, layout);
+    Scan *ts = ScanInit(t,SCAN_TABLE_CODE);
     while (TableScanNext(ts)) {
         numRecs++;
         numblocks = TableScanGetRID(ts)->BlockNum + 1;

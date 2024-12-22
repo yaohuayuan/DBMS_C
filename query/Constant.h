@@ -7,7 +7,7 @@
 
 #include <stdbool.h>
 
-typedef struct {
+typedef struct Constant{
     bool isInt;
     union {
         int ival;

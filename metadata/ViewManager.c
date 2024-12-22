@@ -20,8 +20,8 @@ ViewManager* ViewManagerInit(bool isNew, TableManager *tableManager, Transaction
 // 创建视图
 void ViewManagerCreateView(ViewManager *viewManager, char *vname, char *vdef, Transaction *transaction) {
     Layout *layout = TableManagerGetLayout(viewManager->tableManager, "viewcat", transaction);
-    TableScan *tableScan = TableScanInit(transaction, "viewcat", layout);
-
+    TableScan *scan = TableScanInit(transaction, "viewcat", layout);
+    Scan *tableScan = ScanInit(scan,SCAN_TABLE_CODE);
     TableScanInsert(tableScan);
     TableScanSetString(tableScan, "viewname", vname);
     TableScanSetString(tableScan, "viewdef", vdef);
@@ -35,14 +35,14 @@ char* ViewManagerGetViewDef(ViewManager *viewManager, char *vname, Transaction *
 
     Layout *layout = TableManagerGetLayout(viewManager->tableManager, "viewcat", transaction);
     TableScan *tableScan = TableScanInit(transaction, "viewcat", layout);
-
-    while (TableScanNext(tableScan)) {
-        if (strcmp(TableScanGetString(tableScan, "viewname"), vname) == 0) {
-            result = strdup(TableScanGetString(tableScan, "viewdef")); // 拷贝字符串以返回
+    Scan *scan = ScanInit(tableScan,SCAN_TABLE_CODE);
+    while (TableScanNext(scan)) {
+        if (strcmp(TableScanGetString(scan, "viewname"), vname) == 0) {
+            result = strdup(TableScanGetString(scan, "viewdef")); // 拷贝字符串以返回
             break;
         }
     }
 
-    TableScanClose(tableScan);
+    TableScanClose(scan);
     return result;
 }

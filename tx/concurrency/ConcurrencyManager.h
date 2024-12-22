@@ -7,7 +7,7 @@
 #include "map.h"
 #include "LockTable.h"
 typedef struct ConCurrencyManager{
-    LockTable *lockTable;
+
     map_str_t * mapStr;
 }ConCurrencyManager;
 ConCurrencyManager * ConCurrencyManagerInit();

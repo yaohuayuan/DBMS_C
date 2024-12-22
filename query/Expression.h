@@ -7,7 +7,8 @@
 #include "Constant.h"
 #include "Schema.h"
 #include "Scan.h"
-typedef struct {
+typedef struct Scan  Scan;
+typedef struct Expression {
     Constant *val;
     char *fldname;
 } Expression;

@@ -41,7 +41,7 @@ Constant* ExpressionEvaluate(Expression *expr, Scan *s) {
     if (expr->val != NULL) {
         return expr->val;
     } else {
-        return s->ops->getVal(s,expr->fldname);
+        return s->getVal(s,expr->fldname);
     }
 }
 

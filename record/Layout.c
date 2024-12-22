@@ -26,8 +26,8 @@ Layout * LayoutInit(Schema*schema,map_int_t* mapInt,int SloSize ){
         while(fieldNode!=NULL){
             map_set(layout->offsets,fieldNode->fileName,pos);
             pos += LayoutLengthInBytes(schema,fieldNode->fileName);
-            int *value = map_get(layout->offsets,fieldNode->fileName);
-            printf("%d\n",*value);
+            //int *value = map_get(layout->offsets,fieldNode->fileName);
+           // printf("%d\n",*value);
             fieldNode=fieldNode->next;
         }
         layout->SlotSize = pos;

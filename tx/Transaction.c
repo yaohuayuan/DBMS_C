@@ -17,6 +17,7 @@ Transaction* TransactionInit(FileManager*fileManager, LogManager*logManager, Buf
     transaction->recoveryManager = RecoveryManagerInit(transaction,transaction->txNum,logManager,bufferManager);
     transaction->conCurrencyManager = ConCurrencyManagerInit();
     transaction->bufferList = BufferListInit(bufferManager);
+    transaction->code = TRANSACTION_RUN;
     return transaction;
 }
 void TransactionCommit(Transaction*transaction){
@@ -24,16 +25,19 @@ void TransactionCommit(Transaction*transaction){
     printf("transaction %d commit\n",transaction->txNum);
     ConCurrencyManagerRelease(transaction->conCurrencyManager);
     BufferListUnpinAll(transaction->bufferList);
+    transaction->code = TRANSACTION_COMMIT;
 }
 void TransactionRollback(Transaction*transaction){
     RecoveryRollback(transaction->recoveryManager);
     printf("transaction %d rollback\n",transaction->txNum);
     ConCurrencyManagerRelease(transaction->conCurrencyManager);
     BufferListUnpinAll(transaction->bufferList);
+    transaction->code = TRANSACTION_ROLLBACK;
 }
 void TransactionRecover(Transaction*transaction){
     BufferManagerFlushAll(transaction->bufferManager,transaction->txNum);
     RecoveryRecovery(transaction->recoveryManager);
+    transaction->code = TRANSACTION_RECOVERY;
 }
 void TransactionPin(Transaction *transaction,BlockID blockId){
     BufferListPin(transaction->bufferList,blockId);
@@ -93,4 +97,9 @@ int TransactionBlockSize(Transaction*transaction){
 }
 int TransactionAvailableBuffs(Transaction*transaction){
     return transaction->bufferManager->numAvailable;
+}
+char * TransactionToSting(Transaction*transaction){
+    char str[512];
+    sprintf(str,"transaction %d",transaction->txNum);
+    return strdup(str);
 }

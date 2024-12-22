@@ -7,80 +7,77 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "ProductScan.h"
 
-// 示例实现：ProductScan
-typedef struct ProductScan {
-    Scan scan;
-    Scan *s1;
-    Scan *s2;
-} ProductScan;
 
-static void ProductScanBeforeFirst(ProductScan *ps) {
-    ps->s1->ops->beforeFirst(ps->s1);
-    ps->s1->ops->next(ps->s1);
-    ps->s2->ops->beforeFirst(ps->s2);
-}
-
-static bool ProductScanNext(ProductScan *ps) {
-    if (ps->s2->ops->next(ps->s2)) {
-        return true;
-    } else {
-        ps->s2->ops->beforeFirst(ps->s2);
-        return ps->s2->ops->next(ps->s2) && ps->s1->ops->next(ps->s1);
+Scan *ScanInit(void *data,ScanCode code){
+    Scan* scan = malloc(sizeof(Scan));
+    scan->code = code;
+    if(code == SCAN_TABLE_CODE){
+        TableScan *tableScan = (TableScan*)data;
+        scan->scanUnion.tableScan = tableScan;
+        scan->next = TableScanNext;
+        scan->hasField = TableScanHasField;
+        scan->getVal = TableScanGetVal;
+        scan->beforeFirst = TableScanBeforeFirst;
+        scan->next = TableScanNext;
+        scan->close = TableScanClose;
+        scan->getInt = TableScanGetInt;
+        scan->getString = TableScanGetString;
+        scan->getInt = TableScanGetInt;
+        scan->getVal = TableScanGetVal;
+        scan->hasField = TableScanHasField;
+        scan->delete = TableScanDelete;
+        scan->insert = TableScanInsert;
+        scan->getRid = TableScanGetRID;
+        scan->moveToRID = TableScanMoveToRid;
+        scan->setInt = TableScanSetInt;
+        scan->setString = TableScanSetString;
+        scan->setVal = TableScanSetVal;
+    }else if(code == SCAN_PRODUCT_CODE){
+        ProductScan *productScan = (ProductScan*)data;
+        scan->code = code;
+        scan->scanUnion.productScan = productScan;
+        scan->beforeFirst = ProductScanBeforeFirst;
+        scan->hasField = ProductScanHasField;
+        scan->next = ProductScanNext;
+        scan->getVal = ProductScanGetVal;
+        scan->getInt = ProductScanGetInt;
+        scan->getVal = ProductScanGetVal;
+        scan->getString = ProductScanGetString;
+        scan->close = ProductScanClose;
+    }else if(code == SCAN_SELECT_CODE){
+        SelectScan *selectScan = (SelectScan*)data;
+        scan->scanUnion.selectScan = selectScan;
+        scan->next = SelectScanNext;
+        scan->hasField = SelectScanHasField;
+        scan->getVal = SelectScanGetVal;
+        scan->beforeFirst = SelectScanBeforeFirst;
+        scan->next = SelectScanNext;
+        scan->close = SelectScanClose;
+        scan->getInt = SelectScanGetInt;
+        scan->getString = SelectScanGetString;
+        scan->getInt = SelectScanGetInt;
+        scan->getVal = SelectScanGetVal;
+        scan->hasField = SelectScanHasField;
+        scan->delete = SelectScanDelete;
+        scan->insert = SelectScanInsert;
+        scan->getRid = SelectScanGetRID;
+        scan->moveToRID = SelectScanMoveToRID;
+        scan->setInt = SelectScanSetInt;
+        scan->setString = SelectScanSetString;
+        scan->setVal = SelectScanSetVal;
+    }else if(code == SCAN_PROJECT_CODE){
+        scan->code = SCAN_PROJECT_CODE;
+        ProjectScan *projectScan = (ProjectScan*)data;
+        scan->scanUnion.projectScan = projectScan;
+        scan->getVal = ProjectScanGetVal;
+        scan->hasField = ProjectScanHasField;
+        scan->getString = ProjectScanGetString;
+        scan->getInt = ProjectScanGetInt;
+        scan->next = ProjectScanNext;
+        scan->beforeFirst = ProjectScanBeforeFirst;
+        scan->close = ProjectClose;
     }
-}
-
-static int ProductScanGetInt(ProductScan *ps, const char *fldname) {
-    if (ps->s1->ops->hasField(ps->s1, fldname)) {
-        return ps->s1->ops->getInt(ps->s1, fldname);
-    } else {
-        return ps->s2->ops->getInt(ps->s2, fldname);
-    }
-}
-
-static const char* ProductScanGetString(ProductScan *ps, const char *fldname) {
-    if (ps->s1->ops->hasField(ps->s1, fldname)) {
-        return ps->s1->ops->getString(ps->s1, fldname);
-    } else {
-        return ps->s2->ops->getString(ps->s2, fldname);
-    }
-}
-
-static Constant* ProductScanGetVal(ProductScan *ps, const char *fldname) {
-    if (ps->s1->ops->hasField(ps->s1, fldname)) {
-        return ps->s1->ops->getVal(ps->s1, fldname);
-    } else {
-        return ps->s2->ops->getVal(ps->s2, fldname);
-    }
-}
-
-static bool ProductScanHasField(ProductScan *ps, const char *fldname) {
-    return ps->s1->ops->hasField(ps->s1, fldname) || ps->s2->ops->hasField(ps->s2, fldname);
-}
-
-static void ProductScanClose(ProductScan *ps) {
-    ps->s1->ops->close(ps->s1);
-    ps->s2->ops->close(ps->s2);
-}
-
-static ScanOps productScanOps = {
-        .beforeFirst = (void (*)(Scan *))ProductScanBeforeFirst,
-        .next = (bool (*)(Scan *))ProductScanNext,
-        .getInt = (int (*)(Scan *, const char *))ProductScanGetInt,
-        .getString = (const char* (*)(Scan *, const char *))ProductScanGetString,
-        .getVal = (Constant* (*)(Scan *, const char *))ProductScanGetVal,
-        .hasField = (bool (*)(Scan *, const char *))ProductScanHasField,
-        .close = (void (*)(Scan *))ProductScanClose
-};
-
-ProductScan* ProductScanInit(Scan *s1, Scan *s2) {
-    ProductScan *ps = (ProductScan *)malloc(sizeof(ProductScan));
-    if (ps == NULL) {
-        fprintf(stderr, "Memory allocation failed.\n");
-        exit(EXIT_FAILURE);
-    }
-    ps->s1 = s1;
-    ps->s2 = s2;
-    ps->scan.ops = &productScanOps;
-    return ps;
+    return scan;
 }

@@ -27,7 +27,7 @@ bool LockTableHasSOtherLock(LockTable *lockTable,BlockID blockId){
 void LockTableXLock(LockTable*lockTable,BlockID blockId,Error *error){
     int NowTime = time(NULL);
     while (LockTableHasSOtherLock(lockTable,blockId)&&!LockTableWaitToLong(NowTime)){
-        // 待写(后期多线程会写)
+        printf("This has S Lock\n");
     };
     if(LockTableHasSOtherLock(lockTable,blockId)){
         error->errorCode = Error_HasSOtherLock;
@@ -45,7 +45,7 @@ void LockTableUnLock(LockTable*lockTable,BlockID blockId){
 void LockTableSLock(LockTable*lockTable,BlockID blockId,Error *error){
     int NowTime = time(NULL);
     while (LockTableHasXLock(lockTable,blockId)&&!LockTableWaitToLong(NowTime)){
-        // 待写(后期多线程会写)
+        printf("This has X Lock\n");
     };
     if(LockTableHasXLock(lockTable,blockId)){
         error->errorCode = Error_HasXLock;

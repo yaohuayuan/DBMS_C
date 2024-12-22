@@ -47,7 +47,9 @@ char* PageGetString(Page *p, int position) {
     // 获取字符串长度
     bufferGetInt(p->buffer, data);
     int length = *data->intData;
-
+    if(length == 1){
+        return strdup("");
+    }
     // 检查长度是否有效
     if (length <= 0) {
         return NULL; // 无效长度

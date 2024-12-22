@@ -6,7 +6,7 @@
 RecordPage * RecordPageInit(Transaction*transaction,BlockID blockId,Layout*layout){
     RecordPage *recordPage = malloc(sizeof (RecordPage));
     recordPage->layout = layout;
-    BlockID_Init(&recordPage->blockId,blockId.fileName,blockId.blockId);
+    recordPage->blockId = blockId;
     recordPage->transaction = transaction;
     TransactionPin(transaction,blockId);
     return recordPage;
@@ -54,13 +54,13 @@ void RecordPageFormat(RecordPage *recordPage){
     while (RecordPageIsValidSlot(recordPage,slot)){
         TransactionSetInt(recordPage->transaction,recordPage->blockId, RecordPageOffset(recordPage,slot),RECORD_PAGE_EMPTY,false);
         Schema *schema = recordPage->layout->schema;
-        FieldNode*fieldNode = schema->fields->next;
+        FieldNode*fieldNode = schema->fields;
         while (fieldNode!=NULL){
             char *fldName = fieldNode->fileName;
             int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
             if(SchemaType(schema,fldName)==FILE_INFO_CODE_INTEGER){
                 TransactionSetInt(recordPage->transaction,recordPage->blockId,fldPos,0,false);
-            }else if(SchemaType(schema,fldName)==FILE_INFO_CODE_VARCHAR){
+            }else{
                 TransactionSetString(recordPage->transaction,recordPage->blockId,fldPos,"",false);
             }
             fieldNode = fieldNode->next;

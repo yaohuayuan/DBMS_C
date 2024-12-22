@@ -144,17 +144,20 @@ void StreamTokenizerType(StreamTokenizer*streamTokenizer){
         if(*c == TOKEN_WORD ){
             StreamTokenizerTokenIDAdd(streamTokenizer->streamTokenizerTokenId,i,TOKEN_WORD);
             while (*c==TOKEN_WORD||*c==TOKEN_INT_CONSTANT){
-
-                streamTokenizer->streamTokenizerTokenId->data[streamTokenizer->streamTokenizerTokenId->len-1].len++;
                 ch = streamTokenizer->data[++i];
                 char key1[2] = {ch, '\0'};
                 if(ch=='\0')
                     break;
+                streamTokenizer->streamTokenizerTokenId->data[streamTokenizer->streamTokenizerTokenId->len-1].len++;
                 c = map_get(streamTokenizer->keySet,key1);
                 if(c == NULL){
                     c = malloc(sizeof (int));
                     *c = TOKEN_UNKNOWN;
                 }
+                if(*c!=TOKEN_WORD&&*c!=TOKEN_INT_CONSTANT){
+                    break;
+                }
+
             }
         }else if(*c == TOKEN_INT_CONSTANT){
             temStart = i;
@@ -177,14 +180,16 @@ void StreamTokenizerType(StreamTokenizer*streamTokenizer){
             }
         }else if(*c == TOKEN_DELIM){
             StreamTokenizerTokenIDAdd(streamTokenizer->streamTokenizerTokenId,i,TOKEN_DELIM);
+            streamTokenizer->streamTokenizerTokenId->data[streamTokenizer->streamTokenizerTokenId->len-1].len++;
             i++;
         }else if(*c == TOKEN_UNKNOWN){
             StreamTokenizerTokenIDAdd(streamTokenizer->streamTokenizerTokenId,i,TOKEN_UNKNOWN);
-            streamTokenizer->streamTokenizerTokenId->data[streamTokenizer->streamTokenizerTokenId->len-1].len++;
+//            streamTokenizer->streamTokenizerTokenId->len++;
             i++;
         }else if(*c == TOKEN_NULL){
+//            StreamTokenizerTokenIDAdd(streamTokenizer->streamTokenizerTokenId,i,TOKEN_UNKNOWN);
+//            streamTokenizer->streamTokenizerTokenId->len++;
             i++;
-            streamTokenizer->streamTokenizerTokenId->data[streamTokenizer->streamTokenizerTokenId->len-1].len++;
         }
     }
 

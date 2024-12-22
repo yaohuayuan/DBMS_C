@@ -44,12 +44,11 @@ const char* ConstantAsString(Constant *c) {
 // 比较两个常量
 int ConstantCompareTo(Constant *c1, Constant *c2) {
     if (c1->isInt && c2->isInt) {
-        return c1->value.ival - c2->value.ival;
+        return c1->value.ival == c2->value.ival;
     } else if (!c1->isInt && !c2->isInt) {
         return strcmp(c1->value.sval, c2->value.sval);
     } else {
-        fprintf(stderr, "Error: Comparing different types of constants.\n");
-        exit(EXIT_FAILURE);
+        return false;
     }
 }
 

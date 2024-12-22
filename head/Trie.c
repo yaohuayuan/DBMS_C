@@ -28,6 +28,9 @@ void TrieInsert(Trie*root,const char *s){
 bool TrieSearchIn(Trie*root,const char *s){
     Trie * current = root;
     for (int i = 0; s[i] != '\0'; i++) {
+        if(!(s[i]>='a'&&s[i]<='z')){
+            return false;
+        }
         int index = s[i] - 'a';
         if (current->next[index] == NULL) {
             return false; // 不存在此前缀

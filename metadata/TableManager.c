@@ -6,13 +6,15 @@
 void TableManagerCreateTable(TableManager *tableManager,char*tblname,Schema*sch,Transaction*transaction){
     Layout *layout = LayoutInit(sch,NULL,-1);
 
-    TableScan *tableCatalog = TableScanInit(transaction,"tblcat",tableManager->tableCatalogLayout);
+    TableScan *table = TableScanInit(transaction,"tblcat",tableManager->tableCatalogLayout);
+    Scan*tableCatalog = ScanInit(table,SCAN_TABLE_CODE);
     TableScanInsert(tableCatalog);
     TableScanSetString(tableCatalog,"tblname",tblname);
     TableScanSetInt(tableCatalog,"slotsize",layout->SlotSize);
     TableScanClose(tableCatalog);
 
-    TableScan *fieldCatalog = TableScanInit(transaction,"fldcat",tableManager->fieldCatalogLayout);
+    TableScan *field = TableScanInit(transaction,"fldcat",tableManager->fieldCatalogLayout);
+    Scan*fieldCatalog = ScanInit(field,SCAN_TABLE_CODE);
     FieldNode *fieldNode = sch->fields;
     while(fieldNode){
         char *fldname = fieldNode->fileName;
@@ -50,18 +52,21 @@ TableManager *TableManagerInit(bool isNew,Transaction*transaction){
 Layout *TableManagerGetLayout(TableManager *tableManager,char *tblname,Transaction *transaction){
     int size = -1;
     TableScan *tableScan = TableScanInit(transaction,"tblcat",tableManager->tableCatalogLayout);
-    while (TableScanNext(tableScan)){
-        if(strcmp(TableScanGetString(tableScan,"tblname"),tblname)==0){
-            size = TableScanGetInt(tableScan,"slotsize");
+    Scan*scan = ScanInit(tableScan,SCAN_TABLE_CODE);
+    while (TableScanNext(scan)){
+        if(strcmp(TableScanGetString(scan,"tblname"),tblname)==0){
+            size = TableScanGetInt(scan,"slotsize");
             break;
         }
     }
-    TableScanClose(tableScan);
+    TableScanClose(scan);
 
     Schema *schema = SchemaInit();
     map_int_t *offsets = malloc(sizeof(map_int_t));
     map_init(offsets);
-    TableScan *fieldCatalog = TableScanInit(transaction,"fldcat",tableManager->fieldCatalogLayout);
+    TableScan *field = TableScanInit(transaction,"fldcat",tableManager->fieldCatalogLayout);
+    Scan *fieldCatalog = ScanInit(field,SCAN_TABLE_CODE);
+
     while(TableScanNext(fieldCatalog)){
         if(strcmp(TableScanGetString(fieldCatalog,"tblname"),tblname)==0){
             char *fldname = TableScanGetString(fieldCatalog,"fldname");

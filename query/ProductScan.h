@@ -4,14 +4,23 @@
 
 #ifndef DBMS_C_PRODUCTSCAN_H
 #define DBMS_C_PRODUCTSCAN_H
-#ifndef PRODUCT_SCAN_H
-#define PRODUCT_SCAN_H
+
 
 #include "Scan.h"
+typedef struct Scan Scan;
+typedef struct ProductScan{
+    Scan *s1,*s2;
 
-typedef struct ProductScan ProductScan;
+}ProductScan;
 
-ProductScan* ProductScanInit(Scan *s1, Scan *s2);
+ProductScan *ProductScanInit(Scan*s1,Scan*s2);
+void ProductScanBeforeFirst(void*Scan);
+bool ProductScanNext(void*Scan);
+int ProductScanGetInt(void *scan,char *fldname);
+char * ProductScanGetString(void *scan,char *fldname);
+Constant * ProductScanGetVal(void *scan,char *fldname);
+bool ProductScanHasField(void *scan,char *fldname);
+void ProductScanClose(void *scan);
 
-#endif // PRODUCT_SCAN_H
+
 #endif //DBMS_C_PRODUCTSCAN_H

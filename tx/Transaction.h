@@ -8,9 +8,15 @@
 #include "BufferManager.h"
 #include "BufferList.h"
 # define Transaction_END_OF_FILE (-1)
+typedef enum {
+    TRANSACTION_COMMIT,  // 已提交
+    TRANSACTION_ROLLBACK,  // 已回滚
+    TRANSACTION_RUN,  // 正在运行
+    TRANSACTION_RECOVERY,
+} TransactionStatus;
 typedef struct RecoveryManager RecoveryManager;
 typedef struct Transaction{
-
+    TransactionStatus code;
     RecoveryManager *recoveryManager;
     ConCurrencyManager *conCurrencyManager;
     BufferManager *bufferManager;
@@ -32,4 +38,5 @@ int TransactionSize(Transaction *transaction,const char *fileName);
 BlockID TransactionAppend(Transaction *transaction,char*fileName);
 int TransactionBlockSize(Transaction*transaction);
 int TransactionAvailableBuffs(Transaction*transaction);
+char * TransactionToSting(Transaction*transaction);
 #endif //DBMS_C_TRANSACTION_H

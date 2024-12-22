@@ -1,0 +1,8 @@
+//
+// Created by yaohuayuan on 2024/12/5.
+//
+
+#ifndef DBMS_C_BETTERQUERYPLANNER_H
+#define DBMS_C_BETTERQUERYPLANNER_H
+
+#endif //DBMS_C_BETTERQUERYPLANNER_H

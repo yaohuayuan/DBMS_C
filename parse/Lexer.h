@@ -23,9 +23,10 @@ bool LexerMathIntConstant(Lexer *lexer);
 bool LexerMatchStringConstant(Lexer*lexer);
 bool LexerMatchKeyWord(Lexer *lexer,char *word);
 bool LexerMatchId(Lexer*lexer);
-void LexerEatDelim(Lexer*lexer);
-double LexerEatIntConstant(Lexer *lexer);
+void LexerEatDelim(Lexer*lexer,char ch);
+int LexerEatIntConstant(Lexer *lexer);
 char* LexerEatStringConstant(Lexer *lexer);
-void LexerEatKeyWord(Lexer*lexer);
+void LexerEatKeyWord(Lexer*lexer,char *s);
 char* LexerEatIDConstant(Lexer *lexer);
+char * LexerEatId(Lexer*lexer);
 #endif //DBMS_C_LEXER_H

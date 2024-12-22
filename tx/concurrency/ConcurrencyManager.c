@@ -3,11 +3,14 @@
 //
 
 #include "ConcurrencyManager.h"
+static LockTable *lockTable = NULL;
 ConCurrencyManager * ConCurrencyManagerInit(){
     ConCurrencyManager *conCurrencyManager = malloc(sizeof (ConCurrencyManager));
     conCurrencyManager->mapStr = malloc(sizeof(map_str_t));
     map_init(conCurrencyManager->mapStr);
-    conCurrencyManager->lockTable = LockTableInit();
+    if(lockTable == NULL){
+        lockTable = LockTableInit();
+    }
     return conCurrencyManager;
 }
 void ConCurrencyManagerSLock(ConCurrencyManager *conCurrencyManager,BlockID blockId){
@@ -17,7 +20,7 @@ void ConCurrencyManagerSLock(ConCurrencyManager *conCurrencyManager,BlockID bloc
     char** value = map_get(conCurrencyManager->mapStr,key);
     Error *error = ErrorInit();
     if(value==NULL){
-        LockTableSLock(conCurrencyManager->lockTable,blockId,error);
+        LockTableSLock(lockTable,blockId,error);
         map_set(conCurrencyManager->mapStr,BlockIDToString(blockId),"S");
     }
 }
@@ -28,9 +31,9 @@ bool ConCurrencyManagerHasXLock(ConCurrencyManager *conCurrencyManager,BlockID b
 void ConCurrencyManagerXLock(ConCurrencyManager *conCurrencyManager,BlockID blockId){
     //char** value = map_get(conCurrencyManager->mapStr,BlockIDToString(blockId));
     Error *error = ErrorInit();
-    if(ConCurrencyManagerHasXLock(conCurrencyManager,blockId)){
+    if(!ConCurrencyManagerHasXLock(conCurrencyManager,blockId)){
         ConCurrencyManagerSLock(conCurrencyManager,blockId);
-        LockTableXLock(conCurrencyManager->lockTable,blockId,error);
+        LockTableXLock(lockTable,blockId,error);
         map_set(conCurrencyManager->mapStr,BlockIDToString(blockId),"X");
     }
 }
@@ -42,7 +45,7 @@ void ConCurrencyManagerRelease(ConCurrencyManager *conCurrencyManager){
 
 // 遍历所有键并记录
     while ((key = map_next(conCurrencyManager->mapStr, &iter))) {
-        LockTableUnLock(conCurrencyManager->lockTable, BloCKIDString2BlockID(key));
+        LockTableUnLock(lockTable, BloCKIDString2BlockID(key));
         keys_to_remove[index++] = key;
     }
 

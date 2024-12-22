@@ -219,7 +219,7 @@ int SetStringRecordWriteToLog(LogManager* logManager, int txNum, BlockID blockId
     int opos = bpos + sizeof(int);
     int vpos = opos + sizeof(int);
     int recLen = vpos + PageMaxLength(strlen(val));
-    Page* page = PageInit(recLen);
+    Page* page = PageInit(recLen+5);
     PageSetInt(page, 0, LogRecordCode_SETSTRING);
     PageSetInt(page, tpos, txNum);
     PageSetString(page, fpos, blockId.fileName);

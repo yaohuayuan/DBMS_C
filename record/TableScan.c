@@ -3,20 +3,24 @@
 //
 
 #include "TableScan.h"
-void TableScanClose(TableScan *tableScan){
+void TableScanClose(void *data){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     if(tableScan->recordPage!=NULL){
         TransactionUnPin(tableScan->transaction,tableScan->recordPage->blockId);
     }
 }
 void TableScanMoveToNewBlock(TableScan*tableScan){
-    TableScanClose(tableScan);
+    Scan *scan = ScanInit(tableScan,SCAN_TABLE_CODE);
+    TableScanClose(scan);
     BlockID blockId = TransactionAppend(tableScan->transaction,tableScan->fileName);
     tableScan->recordPage = RecordPageInit(tableScan->transaction,blockId, tableScan->layout);
     RecordPageFormat(tableScan->recordPage);
     tableScan->currentSlot = -1;
 }
 void TableScanMoveToBlock(TableScan*tableScan,int blkNum){
-    TableScanClose(tableScan);
+    Scan *scan = ScanInit(tableScan,SCAN_TABLE_CODE);
+    TableScanClose(scan);
     BlockID blockId ;
     BlockID_Init(&blockId,tableScan->fileName,blkNum);
     tableScan->recordPage = RecordPageInit(tableScan->transaction,blockId, tableScan->layout);
@@ -36,26 +40,54 @@ TableScan *TableScanInit(Transaction*transaction,char*TBName,Layout*layout){
     }else{
         TableScanMoveToBlock(tableScan,0);
     }
+//    tableScan->updateScan->updateScanOps->ops->beforeFirst = TableScanBeforeFirst;
+//    tableScan->updateScan->updateScanOps->ops->next = TableScanNext;
+//    tableScan->updateScan->updateScanOps->ops->close = TableScanClose;
+//    tableScan->updateScan->updateScanOps->ops->getInt = TableScanGetInt;
+//    tableScan->updateScan->updateScanOps->ops->getString = TableScanGetString;
+//    tableScan->updateScan->updateScanOps->ops->getInt = TableScanGetInt;
+//    tableScan->updateScan->updateScanOps->ops->getVal = TableScanGetVal;
+//    tableScan->updateScan->updateScanOps->ops->hasField = TableScanHasField;
+//    tableScan->updateScan->updateScanOps->delete = TableScanDelete;
+//    tableScan->updateScan->updateScanOps->insert = TableScanInsert;
+//    tableScan->updateScan->updateScanOps->getRid = TableScanGetRID;
+//    tableScan->updateScan->updateScanOps->moveToRID = TableScanMoveToRid;
+//    tableScan->updateScan->updateScanOps->setInt = TableScanSetInt;
+//    tableScan->updateScan->updateScanOps->setString = TableScanSetString;
+//    tableScan->updateScan->updateScanOps->setVal = TableScanSetVal;
+
     return tableScan;
 }
-void TableScanBeforeFirst(TableScan*tableScan){
+void TableScanBeforeFirst(void *data){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     TableScanMoveToBlock(tableScan,0);
 }
 bool TableScanAtLastBlock(TableScan *tableScan){
     return tableScan->recordPage->blockId.blockId == TransactionSize(tableScan->transaction,tableScan->fileName)-1;
 }
-bool TableScanNext(TableScan*tableScan){
-    tableScan->currentSlot = RecordPageNextAfter(tableScan->recordPage,tableScan->currentSlot);
-    while(tableScan->currentSlot<0){
-        if(TableScanAtLastBlock(tableScan)){
+bool TableScanNext(void *data) {
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
+   // printf("Current slot before: %d\n", tableScan->currentSlot);
+    tableScan->currentSlot = RecordPageNextAfter(tableScan->recordPage, tableScan->currentSlot);
+   // printf("Next slot: %d\n", tableScan->currentSlot);
+    while (tableScan->currentSlot < 0) {
+        //printf("Moving to next block...\n");
+        if (TableScanAtLastBlock(tableScan)) {
+           // printf("At last block, exiting.\n");
             return false;
         }
-        TableScanMoveToBlock(tableScan,tableScan->recordPage->blockId.blockId+1);
-        tableScan->currentSlot = RecordPageNextAfter(tableScan->recordPage,tableScan->currentSlot);
+        TableScanMoveToBlock(tableScan, tableScan->recordPage->blockId.blockId + 1);
+        tableScan->currentSlot = RecordPageNextAfter(tableScan->recordPage, tableScan->currentSlot);
+        //printf("Slot after moving to next block: %d\n", tableScan->currentSlot);
     }
     return true;
 }
-void TableScanInsert(TableScan*tableScan){
+
+void TableScanInsert(void *data){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     tableScan->currentSlot = RecordPageInsertAfter(tableScan->recordPage,tableScan->currentSlot);
     while (tableScan->currentSlot<0){
         if(TableScanAtLastBlock(tableScan)){
@@ -66,31 +98,65 @@ void TableScanInsert(TableScan*tableScan){
         tableScan->currentSlot = RecordPageInsertAfter(tableScan->recordPage,tableScan->currentSlot);
     }
 }
-void TableScanDelete(TableScan*tableScan){
+void TableScanDelete(void *data){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     RecordPageDelete(tableScan->recordPage,tableScan->currentSlot);
 }
-void TableMoveToRid(TableScan*tableScan,RID *rid){
+void TableScanMoveToRid(void *data,RID *rid){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     TableScanClose(tableScan);
     BlockID blockId;
     BlockID_Init(&blockId,tableScan->fileName,rid->BlockNum);
     tableScan->recordPage = RecordPageInit(tableScan->transaction,blockId,tableScan->layout);
     tableScan->currentSlot = rid->Slot;
 }
-bool TableScanHasField(TableScan*tableScan,char*fileName){
+bool TableScanHasField(void *data,char*fileName){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     return SchemaHasField(tableScan->layout->schema,fileName);
 }
-int TableScanGetInt(TableScan *tableScan,char *fileName){
+int TableScanGetInt(void *data,char *fileName){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     return RecordPageGetInt(tableScan->recordPage,tableScan->currentSlot,fileName);
 }
-char* TableScanGetString(TableScan *tableScan,char *fileName){
+char* TableScanGetString(void *data,char *fileName){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     return RecordPageGetString(tableScan->recordPage,tableScan->currentSlot,fileName);
 }
-void TableScanSetInt(TableScan*tableScan,char*fileName,int data){
-    RecordSetInt(tableScan->recordPage,tableScan->currentSlot,fileName,data);
+void TableScanSetInt(void *data,char*fileName,int idata){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
+    RecordSetInt(tableScan->recordPage,tableScan->currentSlot,fileName,idata);
 }
-void TableScanSetString(TableScan*tableScan,char*fileName,char* data){
-    RecordSetString(tableScan->recordPage,tableScan->currentSlot,fileName,data);
+void TableScanSetString(void *data,char*fileName,char* sdata){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
+    RecordSetString(tableScan->recordPage,tableScan->currentSlot,fileName,sdata);
 }
-RID* TableScanGetRID(TableScan*tableScan){
+RID* TableScanGetRID(void *data){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
     return RIDInit(tableScan->recordPage->blockId.blockId,tableScan->currentSlot);
+}
+Constant* TableScanGetVal(void *data,char *fldname){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
+    if(SchemaType(tableScan->layout->schema,fldname)==FILE_INFO_CODE_INTEGER){
+        return ConstantInitInt(TableScanGetInt(scan,fldname));
+    }else{
+        return ConstantInitString(TableScanGetString(scan,fldname));
+    }
+}
+void TableScanSetVal(void *data,char *fldname,Constant*val){
+    Scan*scan    = (Scan*)data;
+    TableScan *tableScan = scan->scanUnion.tableScan;
+    if(SchemaType(tableScan->layout->schema,fldname)==FILE_INFO_CODE_INTEGER){
+        TableScanSetInt(scan,fldname,ConstantAsInt(val));
+    }else{
+        TableScanSetString(scan,fldname,ConstantAsString(val));
+    }
 }

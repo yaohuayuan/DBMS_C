@@ -4,14 +4,23 @@
 
 #ifndef DBMS_C_PROJECTSCAN_H
 #define DBMS_C_PROJECTSCAN_H
-#ifndef PROJECT_SCAN_H
-#define PROJECT_SCAN_H
+
 
 #include "Scan.h"
+#include "List.h"
+typedef struct ProjectScan{
+    Scan *s;
+    List *fieldList;
+}ProjectScan;
 
-typedef struct ProjectScan ProjectScan;
+ProjectScan* ProjectScanInit(Scan *s,List*fieldList);
+void ProjectScanBeforeFirst(void *data);
+bool ProjectScanNext(void *data);
+bool ProjectScanHasField(void*data,char *fldname);
+int ProjectScanGetInt(void *data,char *fldname);
+char * ProjectScanGetString(void *data,char *fldname);
+Constant * ProjectScanGetVal(void *data,char *fldname);
+void ProjectClose(void *data);
 
-ProjectScan* ProjectScanInit(Scan *s, const char **fieldlist, int numFields);
-
-#endif // PROJECT_SCAN_H
 #endif //DBMS_C_PROJECTSCAN_H
+

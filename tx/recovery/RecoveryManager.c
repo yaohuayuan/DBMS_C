@@ -28,7 +28,7 @@ void RecoveryDoRollback(RecoveryManager*recoveryManager){
     LogIterator *logIterator = LogManager2LogManager(recoveryManager->logManager);
     while (LogIteratorHasNext(logIterator)){
        ByteBufferData*byteBufferData= LogIteratorNext(logIterator);
-        ByteBuffer *buffer = bufferAllocate(byteBufferData->bytesData->length);
+        ByteBuffer *buffer = bufferAllocate(byteBufferData->bytesData->length+10);
         buffer->data = byteBufferData->bytesData->data;
         buffer->type = byteBufferData->bytesData->type;
         LogRecord *logRecord = LogRecordInit(buffer);

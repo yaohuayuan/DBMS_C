@@ -60,7 +60,7 @@ void BufferListUnPin(BufferList *bufferList,BlockID blockId){
         }
         p=p->next;
     }
-    if(flag){
+    if(!flag){
         map_remove(bufferList->buffers, BlockIDToString(blockId));
     }
 }
