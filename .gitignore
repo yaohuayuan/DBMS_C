@@ -1,0 +1,46 @@
+# 编译产物和构建目录
+cmake-build-debug/
+build/
+*.exe
+*.obj
+*.o
+*.log
+*.ilk
+*.pdb
+*.idb
+
+# CMake生成的文件
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build.ninja
+rules.ninja
+*.ninja_log
+*.ninja_deps
+
+# CLion IDE相关
+.idea/
+*.iml
+cmake-build-debug/.idea/
+
+# 临时文件
+*.swp
+*.tmp
+*.bak
+*.old
+
+# 编辑器生成的文件
+.vscode/
+*.user
+*.suo
+
+# 日志文件
+*.log
+
+# 其他可能生成的二进制文件
+*.dll
+*.so
+*.dylib
+
+# 忽略测试输出目录
+cmake-build-debug/Testing/Temporary/
