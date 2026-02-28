@@ -1,75 +1,121 @@
 //
 // Created by Lenovo on 2025/7/16.
 //
-
 #include "BufferManager.h"
-BufferManager *  BufferManagerInit(FileManager *fileManager,LogManager *logManager,int numBuffs){
-    BufferManager *bufferManager = malloc(sizeof(BufferManager));
-    bufferManager->bufferSize = numBuffs;
-    bufferManager->bufferPool = malloc(sizeof (Buffer)*numBuffs);
-    for(int i=0;i<numBuffs;i++){
-        bufferManager->bufferPool[i] = BufferInit(fileManager,logManager);
-    }
-    bufferManager->numAvailable = numBuffs;
-    return bufferManager;
-}
-void BufferManagerFlushAll(BufferManager *bufferManager,int tx){
-    for(int i=0;i<bufferManager->bufferSize;i++){
-        if(bufferManager->bufferPool[i]->txNum == tx){
-            BufferFlush(bufferManager->bufferPool[i]);
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "LRU/LRUPolicy.h"
+
+Buffer *BufferManagerFindExistingBuffer(BufferManager *bm, BlockID *blockId){
+    for(int i = 0; i < bm->bufferSize; i++){
+        Buffer *buf = *(Buffer **)CVectorAt(bm->bufferPool, i);
+        if(buf->blockId && BlockIDEqual(blockId, buf->blockId)){
+            return buf;
         }
-    }
-}
-void BufferManagerUnpin(BufferManager *bufferManager,Buffer *buffer){
-    BufferUnPin(buffer);
-    if(!BufferIsPinned(buffer)){
-        bufferManager->numAvailable++;
-    }
-}
-Buffer* BufferManagerFindExistingBuffer(BufferManager *bufferManager,BlockID *blockId){
-    for(int i=0;i<bufferManager->bufferSize;i++){
-        Buffer *buffer = bufferManager->bufferPool[i];
-        if(buffer->blockId->BlockID!=-1&&buffer->blockId->fileName!=NULL&&BlockIDEqual(blockId,buffer->blockId))
-            return buffer;
     }
     return NULL;
 }
-Buffer* BufferManagerChooseUnPinnedBuffer(BufferManager* bufferManager){
-    Buffer *lru = NULL;
-    time_t oldest = time(NULL) + 1;
-    for (int i = 0; i < bufferManager->bufferSize; i++) {
-        Buffer *buf = bufferManager->bufferPool[i];
-        if (!BufferIsPinned(buf) && buf->lastUsed < oldest) {
-            oldest = buf->lastUsed;
-            lru = buf;
-        }
-    }
-    return lru;
+
+ bool BufferManagerWaitTooLong(long start){
+    return time(NULL) - start > MAX_TIME;
 }
-Buffer* BufferManagerTryToPin(BufferManager *bufferManager, BlockID *blockId){
-    Buffer *buffer = BufferManagerFindExistingBuffer(bufferManager,blockId);
-    if(buffer == NULL){
-        buffer = BufferManagerChooseUnPinnedBuffer(bufferManager);
-        if(buffer == NULL){
+
+Buffer *BufferManagerTryToPin(BufferManager *bm, BlockID *blockId) {
+    // 1. 已存在？
+    Buffer *buffer = BufferManagerFindExistingBuffer(bm, blockId);
+    if (buffer != NULL) {
+        if (buffer->pins == 0)
+            bm->numAvailable--;
+        bm->policy->record_access(bm->policy->impl, buffer->frame_id);
+        BufferPin(buffer);
+        return buffer;
+    }
+
+    // 2. 找空闲 buffer
+    buffer = BufferManagerChooseUnPinnedBuffer(bm);
+
+    // 3. 如果没有空闲，再 evict
+    if (buffer == NULL) {
+        int fid = bm->policy->evict(bm->policy->impl);
+        if (fid < 0)
             return NULL;
-        }
-        BufferAssignToBlock(buffer,blockId);
+
+        buffer = *(Buffer**)CVectorAt(bm->bufferPool, fid);
+        if (BufferIsPinned(buffer))
+            return NULL;
     }
-    if(!BufferIsPinned(buffer)){
-        bufferManager->numAvailable--;
-    }
+
+    // 4. 使用这个 buffer
+    BufferAssignToBlock(buffer, blockId);
+    bm->numAvailable--;
+    bm->policy->record_access(bm->policy->impl, buffer->frame_id);
     BufferPin(buffer);
     return buffer;
 }
-bool BufferManagerWaitTooLong(long startTime){
-    long nowTime = time(NULL);
-    return nowTime-startTime>MAX_TIME;
-}
-Buffer *  BufferManagerPin(BufferManager *bufferManager,BlockID *blockId){
-    Buffer *buffer = BufferManagerTryToPin(bufferManager,blockId);
-    long startTime = time(NULL);
-    while(buffer == NULL&& !BufferManagerWaitTooLong(startTime)){
-        buffer = BufferManagerTryToPin(bufferManager,blockId);
+
+
+BufferManager *BufferManagerInit(
+    FileManager *fileManager,
+    LogManager *logManager,
+    int numBuffs,
+    ReplacementPolicy *policy
+){
+    BufferManager *bm = malloc(sizeof(BufferManager));
+    bm->bufferSize = numBuffs;
+    bm->numAvailable = numBuffs;
+    if (policy)
+        bm->policy = policy;
+    else{
+        bm->policy = LRUPolicyCreate(numBuffs);
     }
-    return buffer;
+    bm->bufferPool = CVectorInit(sizeof(Buffer *), NULL, NULL, NULL);
+    for(int i = 0; i < numBuffs; i++){
+        Buffer *buf = BufferInit(fileManager, logManager);
+        buf->frame_id = i;
+        CVectorPushBack(bm->bufferPool, &buf);
+    }
+    return bm;
+}
+
+void
+BufferManagerFlushAll(BufferManager *bm, int tx){
+    for(int i = 0; i < bm->bufferSize; i++){
+        Buffer *buf = *(Buffer **)CVectorAt(bm->bufferPool, i);
+        if(buf->blockId && buf->txNum == tx)
+            BufferFlush(buf);
+    }
+}
+
+void
+BufferManagerUnpin(BufferManager *bm, Buffer *buffer){
+    int wasPinned = BufferIsPinned(buffer);
+    BufferUnPin(buffer);
+
+    if(wasPinned && buffer->pins == 0){
+        bm->numAvailable++;
+        bm->policy->remove(bm->policy->impl, buffer->frame_id);
+    }
+}
+
+Buffer *BufferManagerPin(BufferManager *bm, BlockID *blockId){
+    long start = time(NULL);
+    Buffer *buf;
+
+    while((buf = BufferManagerTryToPin(bm, blockId)) == NULL){
+        if(BufferManagerWaitTooLong(start))
+            return NULL;
+        sleep(1);
+    }
+    return buf;
+}
+Buffer* BufferManagerChooseUnPinnedBuffer(BufferManager* bm) {
+    for (int i = 0; i < bm->bufferSize; i++) {
+        Buffer* buf = *(Buffer**)CVectorAt(bm->bufferPool, i);
+        if (!BufferIsPinned(buf)) {
+            return buf;
+        }
+    }
+    return NULL;
 }

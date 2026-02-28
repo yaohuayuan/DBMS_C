@@ -47,8 +47,8 @@ int BasicUpdatePlannerExecuteInsert(BasicUpdatePlanner *basicUpdatePlanner,Inser
     ListNode *fldHead = data->flds->head;
     ListNode *valHead = data->vals->head;
     while (fldHead){
-        Constant *val = valHead->data->constantData;
-        char *fldname = fldHead->data->stringData;
+        Constant *val = valHead->value.constantData;
+        CString*fldname = fldHead->value.stringData;
         scan->setVal(scan,fldname,val);
         fldHead = fldHead->next;
         valHead = valHead->next;
@@ -61,7 +61,10 @@ int BasicUpdatePlannerExecuteCreateTable(BasicUpdatePlanner *basicUpdatePlanner,
     return 0;
 }
 int BasicUpdatePlannerExecuteCreateView(BasicUpdatePlanner *basicUpdatePlanner,CreateViewData *data,Transaction*transaction){
-    MetadataMgrCreateView(basicUpdatePlanner->metadataMgr,data->viewName,QueryDataToString(data->queryData),transaction);
+    char *viewDefStr = QueryDataToString(data->queryData);
+    CString *viewDef = CStringCreateFromCStr(viewDefStr);
+    MetadataMgrCreateView(basicUpdatePlanner->metadataMgr,data->viewName,viewDef,transaction);
+    CStringDestroy(viewDef);
     return 0;
 }
 int BasicUpdatePlannerExecuteCreateIndex(BasicUpdatePlanner *basicUpdatePlanner,CreateIndexData *data,Transaction*transaction){

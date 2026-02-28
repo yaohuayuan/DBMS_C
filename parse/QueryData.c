@@ -28,7 +28,8 @@ char* QueryDataToString(QueryData *qd) {
     ListNode *fieldNode = qd->fields->head;
     size_t offset = strlen(result);
     while (fieldNode) {
-        char *fieldName = fieldNode->data->stringData;
+        CString *fieldNameCStr = fieldNode->value.stringData;
+        char *fieldName = CStringGetPtr(fieldNameCStr);
         size_t len = strlen(fieldName);
 
         // 确保缓冲区足够大
@@ -54,7 +55,8 @@ char* QueryDataToString(QueryData *qd) {
 
     ListNode *tableNode = qd->tables->head;
     while (tableNode) {
-        char *tableName = tableNode->data->stringData;
+        CString *tableNameCStr = tableNode->value.stringData;
+        char *tableName = CStringGetPtr(tableNameCStr);
         size_t len = strlen(tableName);
 
         // 确保缓冲区足够大

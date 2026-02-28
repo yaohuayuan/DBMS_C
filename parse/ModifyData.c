@@ -3,11 +3,12 @@
 //
 
 #include "ModifyData.h"
-ModifyData *ModifyDataInit(char*tblname,char *fldname,Expression*newVal,Predicate*predicate){
+#include "CString.h"
+ModifyData *ModifyDataInit(CString*tblname,CString *fldname,Expression*newVal,Predicate*predicate){
     ModifyData *modifyData = malloc(sizeof(ModifyData));
     modifyData->predicate = predicate;
     modifyData->newVal =    newVal;
-    modifyData->tblname = strdup(tblname);
-    modifyData->fldname = strdup(fldname);
+    modifyData->tblname = CStringCreateFromCString(tblname);
+    modifyData->fldname = CStringCreateFromCString(fldname);
     return modifyData;
 }

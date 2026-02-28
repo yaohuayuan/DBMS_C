@@ -10,13 +10,13 @@ Planner *PlannerInit(BasicQueryPlanner*queryPlanner,BasicUpdatePlanner *updatePl
     planner->queryPlanner = queryPlanner;
     return planner;
 }
-Plan* PlannerCreateQueryPlan(Planner*planner,char*qry,Transaction*transaction){
-    Parser *parser = ParserInit(qry);
+Plan* PlannerCreateQueryPlan(Planner*planner,CString*qry,Transaction*transaction){
+    Parser *parser = ParserInit(CStringGetPtr(qry));
     QueryData*data = ParserQuery(parser);
     return BasicQueryPlannerCreatPlan(planner->queryPlanner,data,transaction);
 }
-int PlannerExecuteUpdate(Planner*planner,char *cmd,Transaction*transaction){
-    Parser*parser = ParserInit(cmd);
+int PlannerExecuteUpdate(Planner*planner,CString *cmd,Transaction*transaction){
+    Parser*parser = ParserInit(CStringGetPtr(cmd));
     CommandData *commandData =   ParserUpdateCmd(parser);
     CommandCode commandCode = commandData->code;
     if(commandCode==CMD_INSERT_DATA){

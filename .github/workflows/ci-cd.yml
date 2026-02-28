@@ -1,5 +1,3 @@
-# Updated GitHub Actions workflow for DBMS CI/CD
-
 name: DBMS CI/CD
 
 on:
@@ -9,48 +7,65 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-
+  build-and-test-linux:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up CMake
-        uses: jwlawson/actions-setup-cmake@v1
-        with:
-          cmake-version: '3.27.2'
+      - name: Install CMake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+        shell: bash
 
       - name: Configure CMake
         run: cmake -B build -S .
+        shell: bash
 
       - name: Build
         run: cmake --build build --config Release
+        shell: bash
 
       - name: Run Tests
         run: |
           cd build
           ctest --output-on-failure
+        shell: bash
+
+  build-and-test-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install CMake
+        run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+        shell: pwsh
+
+      - name: Configure CMake
+        run: cmake -B build -S .
+        shell: pwsh
+
+      - name: Build
+        run: cmake --build build --config Release
+        shell: pwsh
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+        shell: pwsh
 
   create-release:
-    runs-on: ${{ matrix.os }}
-    needs: build-and-test
+    runs-on: ubuntu-latest
+    needs: [build-and-test-linux, build-and-test-windows]
     if: success() && github.ref == 'refs/heads/main'
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up CMake
-        uses: jwlawson/actions-setup-cmake@v1
-        with:
-          cmake-version: '3.27.2'
+      - name: Install CMake
+        run: sudo apt-get update && sudo apt-get install -y cmake
 
       - name: Configure CMake
         run: cmake -B build -S .
@@ -62,13 +77,8 @@ jobs:
         id: package
         run: |
           mkdir -p release
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            cp build/DBMS release/DBMS-Linux
-            echo "EXECUTABLE_PATH=release/DBMS-Linux" >> $GITHUB_ENV
-          else
-            cp build/DBMS.exe release/DBMS-Windows.exe
-            echo "EXECUTABLE_PATH=release/DBMS-Windows.exe" >> $GITHUB_ENV
-          fi
+          cp build/DBMS release/DBMS-Linux
+          echo "EXECUTABLE_PATH=release/DBMS-Linux" >> $GITHUB_ENV
 
       - name: Create GitHub Release
         id: create_release
@@ -78,11 +88,5 @@ jobs:
         with:
           tag_name: v${{ github.run_number }}
           name: Release v${{ github.run_number }}
-          body: "Automated build from GitHub Actions for ${{ matrix.os }}"
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
+          body: "Automated build from GitHub Actions"
           files: ${{ env.EXECUTABLE_PATH }}

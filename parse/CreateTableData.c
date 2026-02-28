@@ -3,9 +3,10 @@
 //
 
 #include "CreateTableData.h"
-CreateTableData* CreateTableDataInit(char *tblname,Schema*schema){
+#include "CString.h"
+CreateTableData* CreateTableDataInit(CString *tblname,Schema*schema){
     CreateTableData *createTableData = malloc(sizeof (CreateTableData));
     createTableData->schema = schema;
-    createTableData->tblname = strdup(tblname);
+    createTableData->tblname = CStringCreateFromCString(tblname);
     return createTableData;
 }

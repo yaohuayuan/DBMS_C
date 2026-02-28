@@ -28,13 +28,13 @@ int SelectPlanRecordsOutput(void *data){
     SelectPlan *selectPlan = plan->planUnion.selectPlan;
     return selectPlan->p->recordsOutput(selectPlan->p) / PredicateReductionFactor(selectPlan->predicate,selectPlan->p);
 }
-int SelectPlanDistinctValues(void *data,char *fldname){
+int SelectPlanDistinctValues(void *data,CString *fldname){
     Plan*plan = (Plan*)data;
     SelectPlan *selectPlan = plan->planUnion.selectPlan;
     if(PredicateEquatesWithConstant(selectPlan->predicate,fldname)!=NULL){
         return 1;
     }else{
-        char *fldname2 = PredicateEquatesWithField(selectPlan->predicate,fldname);
+        CString *fldname2 = PredicateEquatesWithField(selectPlan->predicate,fldname);
         if(fldname2!=NULL){
             return MIN(selectPlan->p->distinctValues(selectPlan->p,fldname),selectPlan->p->distinctValues(selectPlan->p,fldname2));
         }else{

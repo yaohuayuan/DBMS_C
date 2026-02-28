@@ -10,9 +10,9 @@
 #include "Scan.h"
 #include "Constant.h"
 typedef struct UpdateScanOPS{
-    void (*setVal)(void *data,char *fldname,Constant*constant);
-    void (*setInt)(void *data,char *fldname,int val);
-    void (*setString)(void *data,char *fldname,char *val);
+    void (*setVal)(void *data,CString *fldname,Constant*constant);
+    void (*setInt)(void *data,CString *fldname,int val);
+    void (*setString)(void *data,CString *fldname,CString *val);
     void (*insert)(void*data);
     void (*delete)(void *data);
     RID *(*getRid)(void *data);

@@ -3,12 +3,12 @@
 //
 
 #include "Layout.h"
-int LayoutLengthInBytes(Schema *schema, char*FldName){
-    int FldType = SchemaType(schema,FldName);
+int LayoutLengthInBytes(Schema *schema, CString *FldName){
+    int FldType = SchemaType(schema, FldName);
     if(FldType == FILE_INFO_CODE_INTEGER){
         return sizeof(int);
     }else{
-        return SchemaLength(schema,FldName)+4;
+        return SchemaLength(schema, FldName) + 4;
     }
 }
 Layout * LayoutInit(Schema*schema,map_int_t* mapInt,int SloSize ){
@@ -24,10 +24,8 @@ Layout * LayoutInit(Schema*schema,map_int_t* mapInt,int SloSize ){
         int pos = sizeof(int);
         FieldNode * fieldNode= schema->fields;
         while(fieldNode!=NULL){
-            map_set(layout->offsets,fieldNode->fileName,pos);
-            pos += LayoutLengthInBytes(schema,fieldNode->fileName);
-            //int *value = map_get(layout->offsets,fieldNode->fileName);
-           // printf("%d\n",*value);
+            map_set(layout->offsets, CStringGetPtr(fieldNode->fileName), pos);
+            pos += LayoutLengthInBytes(schema, fieldNode->fileName);
             fieldNode=fieldNode->next;
         }
         layout->SlotSize = pos;
@@ -35,7 +33,7 @@ Layout * LayoutInit(Schema*schema,map_int_t* mapInt,int SloSize ){
 
     return layout;
 }
-int LayoutOffset(Layout*layout ,char*FldName){
-    int *val = map_get(layout->offsets,FldName);
+int LayoutOffset(Layout*layout, CString *FldName){
+    int *val = map_get(layout->offsets, CStringGetPtr(FldName));
     return *val;
 }

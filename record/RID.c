@@ -13,9 +13,9 @@ bool RIDEqual(RID *rid1,RID *rid2){
     return rid1->Slot==rid2->Slot&&rid1->BlockNum==rid2->BlockNum;
 }
 char *RIDToString(RID*rid){
-    char *str = malloc(256); // 分配足够的内存
+    char *str = malloc(20); // 足够大的缓冲区
     if (str == NULL)
         return NULL; // 检查分配是否成功
-    snprintf(str, 256, "This RID is BlockNum: %d, Slot: %d", rid->BlockNum,rid->Slot);
+    snprintf(str, 20, "(%d,%d)", rid->BlockNum, rid->Slot);
     return str;
 }

@@ -3,71 +3,67 @@
 //
 
 #include "BlockID.h"
-BlockID *block_id_init(CString *name, int id){
+#include "stdio.h"
+BlockID *BlockIDInit(CString *name, int id){
+    if (!name)
+        return NULL;
     BlockID *b = (BlockID *)malloc(sizeof(BlockID));
-    b->fileName = c_string_copy(name);
+    b->fileName = CStringCreateFromCString(name);
     b->BlockID = id;
     return b;
 }
-CString* blockId_getFileName(BlockID *b){
-    return c_string_copy(b->fileName);
-}
-int blockId_getBlockId(BlockID *b){
-    return b->BlockID;
+CString* BlockIDGetFileName(const BlockID *b){
+    return b->fileName;
 }
 
-CString* blockId_to_CString(BlockID *b){
-    CString *c_string = c_string_copy(b->fileName);
-    c_string_append(c_string,c_string_init(":"));
-    int counter = b->BlockID;
-    while (counter){
-        char *num = (char *)malloc(2*sizeof(char));
-        num[0] = counter%10+'0';
-        num[1] = '\0';
-        CString *c_string_num = c_string_init(num);
-        c_string_append(c_string,c_string_num);
-        counter /= 10;
+
+CString* BlockID2CString(BlockID *b) {
+    CString *CStr = CStringCreateFromCString(b->fileName);
+    CStringAppendCStr(CStr, ": ");
+    char numStr[20];
+    snprintf(numStr, sizeof(numStr), "%d", b->BlockID);  // 格式化 BlockID 为字符串
+    CString *blockIDStr = CStringCreateFromCStr(numStr);
+    CStringAppendCString(CStr, blockIDStr);
+    CStringDestroy(blockIDStr);
+    return CStr;
+}
+
+
+bool BlockIDEqual(BlockID *b1, BlockID *b2){
+    return BlockIDGetBlockID(b1) == BlockIDGetBlockID(b2)
+    && CStringEqual(BlockIDGetFileName(b1),BlockIDGetFileName(b2));
+}
+
+
+BlockID* BlockIDCString2BlockID(CString *str) {
+    int pos = CStringFind(str, ":");
+    if (pos < 0 || pos + 1 >= (int)str->length) {
+        return NULL;
     }
-    return c_string;
-}
-
-bool blockId_equal(BlockID *b1, BlockID *b2){
-    return blockId_getBlockId(b1) == blockId_getBlockId(b2) && c_string_compare(blockId_getFileName(b1),blockId_getFileName(b2)) == 0;
-}
-
-
-BlockID* blockKIdCString2BlockID(CString *str){
-    int i;
-    for (i = 0; i < str->length; i++) {
-        if (str->data[i] == ':') {
+    CString *file_name = CStringSubstring(str, 0, pos);
+    int start = pos + 1;
+    while (start < (int)str->length && str->data[start] == ' ') {
+        start++;
+    }
+    char numStr[32] = {0};
+    int len = 0;
+    for (int i = start; i < (int)str->length && len < 31; i++) {
+        if ((str->data[i] >= '0' && str->data[i] <= '9') || str->data[i] == '-') {
+            numStr[len++] = str->data[i];
+        } else {
             break;
         }
     }
 
-    // 如果没找到 ':'，返回 NULL
-    if (i == str->length) {
-        return NULL;
-    }
-
-    // 拷贝文件名部分
-    char *file_part = (char *)malloc(i + 1);
-    strncpy(file_part, str->data, i);
-    file_part[i] = '\0';  // 末尾加 \0
-    CString *file_name = c_string_init(file_part);
-    free(file_part);  // c_string_init 里会复制值
-
-    // 拷贝 block ID 数字部分
-    int block_id = 0;
-    for (int j = i + 1; j < str->length; j++) {
-        if (str->data[j] >= '0' && str->data[j] <= '9') {
-            block_id = block_id * 10 + (str->data[j] - '0');
-        } else {
-            // 非法字符
-            c_string_free(file_name);
-            return NULL;
-        }
-    }
-
-    return block_id_init(file_name, block_id);
-
+    int block_id = atoi(numStr);
+    BlockID *blk = BlockIDInit(file_name, block_id);
+    CStringDestroy(file_name);
+    return blk;
+}
+void BlockIDDestroy(BlockID *blockId){
+    CStringDestroy(blockId->fileName);
+    free(blockId);
+}
+int BlockIDGetBlockID(const BlockID *b){
+    return b->BlockID;
 }

@@ -10,9 +10,9 @@ Scan *TablePlanOpen(void *data){
     Scan *scan = ScanInit(TableScanInit(tablePlan->tx,tablePlan->tblname,tablePlan->layout),SCAN_TABLE_CODE);
     return scan;
 }
-TablePlan *TablePlanInit(Transaction*tx,char *tblname,MetadataMgr*metadataMgr){
+TablePlan *TablePlanInit(Transaction*tx,CString *tblname,MetadataMgr*metadataMgr){
     TablePlan *tablePlan = malloc(sizeof(TablePlan));
-    tablePlan->tblname = strdup(tblname);
+    tablePlan->tblname = CStringCreateFromCString(tblname);
     tablePlan->tx = tx;
     tablePlan->layout = MetadataMgrGetLayout(metadataMgr,tblname,tx);
     tablePlan->si = MetadataMgrGetStatInfo(metadataMgr,tblname,tablePlan->layout,tx);
@@ -29,10 +29,10 @@ int TablePlanRecordsOutput(void *data){
     TablePlan*tablePlan =plan->planUnion.tablePlan;
     return StatInfoRecordsOutput(tablePlan->si);
 }
-int TablePlanDistinctValues(void *data,char *fldname){
+int TablePlanDistinctValues(void *data,CString *fldname){
     Plan *plan = (Plan*)data;
     TablePlan*tablePlan =plan->planUnion.tablePlan;
-    return StatInfoDistinctValues(tablePlan->si,fldname);
+    return StatInfoDistinctValues(tablePlan->si,CStringGetPtr(fldname));
 }
 Schema *TablePlanSchema(void *data){
     Plan *plan = (Plan*)data;

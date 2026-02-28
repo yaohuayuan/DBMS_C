@@ -8,12 +8,15 @@
 #include "BasicQueryPlanner.h"
 #include "Planner.h"
 #include "LogManager.h"
+#include "LRU/LRUPolicy.h"
+#include "ReplacementPolicy.h"
 SimpleDB *SimpleDBInit(char *dirname,int blocksize,int buffersize){
     SimpleDB *simpleDB = malloc(sizeof (SimpleDB));
+    ReplacementPolicy *replacementPolicy = LRUPolicyCreate(8);
     if(blocksize==SIMPLE_DB_INIT_VAL||buffersize==SIMPLE_DB_INIT_VAL){
         simpleDB->fileManager = FileManagerInit(CStringCreateFromCStr(dirname) ,BLOCK_SIZE);
         simpleDB->logManager = LogManagerInit(simpleDB->fileManager, CStringCreateFromCStr(LOG_FILE));
-        simpleDB->bufferManager = BufferManagerInit(simpleDB->fileManager,simpleDB->logManager,BUFFER_SIZE);
+        simpleDB->bufferManager = BufferManagerInit(simpleDB->fileManager,simpleDB->logManager,BUFFER_SIZE,replacementPolicy);
 //        simpleDB->transactionManager = TransactionManagerInit();
         Transaction *tx = SimpleDataNewTX(simpleDB);
         bool isNew = simpleDB->fileManager->isNew;
@@ -30,7 +33,7 @@ SimpleDB *SimpleDBInit(char *dirname,int blocksize,int buffersize){
     }else{
         simpleDB->fileManager = FileManagerInit(CStringCreateFromCStr(dirname),blocksize);
         simpleDB->logManager = LogManagerInit(simpleDB->fileManager,CStringCreateFromCStr(LOG_FILE));
-        simpleDB->bufferManager = BufferManagerInit(simpleDB->fileManager,simpleDB->logManager,buffersize);
+        simpleDB->bufferManager = BufferManagerInit(simpleDB->fileManager,simpleDB->logManager,buffersize,replacementPolicy);
     }
 
     return simpleDB;

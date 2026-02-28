@@ -44,3 +44,8 @@ cmake-build-debug/.idea/
 
 # 忽略测试输出目录
 cmake-build-debug/Testing/Temporary/
+bin/
+build/
+cmake-build-debug*
+*.o
+cmake-build-debug*

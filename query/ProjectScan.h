@@ -16,10 +16,10 @@ typedef struct ProjectScan{
 ProjectScan* ProjectScanInit(Scan *s,List*fieldList);
 void ProjectScanBeforeFirst(void *data);
 bool ProjectScanNext(void *data);
-bool ProjectScanHasField(void*data,char *fldname);
-int ProjectScanGetInt(void *data,char *fldname);
-char * ProjectScanGetString(void *data,char *fldname);
-Constant * ProjectScanGetVal(void *data,char *fldname);
+bool ProjectScanHasField(void*data,CString *fldname);
+int ProjectScanGetInt(void *data,CString *fldname);
+char * ProjectScanGetString(void *data,CString *fldname);
+Constant * ProjectScanGetVal(void *data,CString *fldname);
 void ProjectClose(void *data);
 
 #endif //DBMS_C_PROJECTSCAN_H

@@ -7,12 +7,16 @@
 
 #include "Buffer.h"
 #include "time.h"
+#include"CVector.h"
+#include"ReplacementPolicy.h"
+
 
 // 定义 BufferManager 结构体，管理所有缓存的缓冲区
 typedef struct BufferManager {
-    Buffer **bufferPool;  // 缓冲池，存储所有的 Buffer 对象
+    CVector* bufferPool; // 缓冲池，存储所有的 Buffer 对象
     int bufferSize;       // 缓冲池的大小，即 Buffer 数组的最大容量
     int numAvailable;     // 当前可用的 Buffer 数量
+    ReplacementPolicy *policy;
 } BufferManager;
 
 #define MAX_TIME  10  // 最大等待时间，用于超时机制（单位：秒）
@@ -25,7 +29,7 @@ typedef struct BufferManager {
  * @param numBuffs 缓冲池的大小，即要初始化的 Buffer 数量。
  * @return 返回一个初始化后的 BufferManager 指针。
  */
-BufferManager *BufferManagerInit(FileManager *fileManager, LogManager *logManager, int numBuffs);
+BufferManager *BufferManagerInit(FileManager *fileManager, LogManager *logManager, int numBuffs,ReplacementPolicy*policy);
 
 /**
  * 刷新 BufferManager 中所有缓冲区的内容，确保数据持久化。

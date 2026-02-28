@@ -5,10 +5,10 @@
 #include "CreateIndexData.h"
 #include "malloc.h"
 #include "string.h"
-CreateIndexData *CreateIndexDataInit(char *idxname,char *tblname,char *fldname){
+CreateIndexData *CreateIndexDataInit(CString *idxname,CString *tblname,CString *fldname){
     CreateIndexData *createIndexData = malloc(sizeof(CreateIndexData));
-    createIndexData->tblname = strdup(tblname);
-    createIndexData->fldname = strdup(fldname);
-    createIndexData->idxname = strdup(idxname);
+    createIndexData->tblname = CStringCreateFromCString(tblname);
+    createIndexData->fldname = CStringCreateFromCString(fldname);
+    createIndexData->idxname = CStringCreateFromCString(idxname);
     return createIndexData;
 }

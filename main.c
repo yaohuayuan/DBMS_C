@@ -4,6 +4,7 @@
 #include "Plan.h"
 #include "Planner.h"
 #include "TransactionManager.h"
+#include "Lib/CString.h"
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 void SelectDataDisplay(Plan *plan,Scan*scan){
     ProjectPlan*projectPlan = plan->planUnion.projectPlan;
@@ -18,11 +19,13 @@ void SelectDataDisplay(Plan *plan,Scan*scan){
     ListNode *fieldHead = field->head;
     int count = 0;
     while(fieldHead){
-        count++;
-        printf("|%*s|",length,fieldHead->data->stringData);
-        fieldHead = fieldHead->next;
+            count++;
+            CString *fieldCStr = fieldHead->value.stringData;
+            const char *fieldName = CStringGetPtr(fieldCStr);
+            printf("|%*s|",length,fieldName);
+            fieldHead = fieldHead->next;
 
-    } printf("\n");
+        } printf("\n");
     int n = (length+2)*count;
     for(int i=0;i<n;i++){
         printf("-");
@@ -71,7 +74,9 @@ int main() {
         // 处理命令
         if (strncmp(cmd, "SELECT", 6) == 0 || strncmp(cmd, "select", 6) == 0) {
             // SELECT 查询语句
-            Plan *plan = PlannerCreateQueryPlan(planner, cmd, transaction);
+            CString *cCmd = CStringCreateFromCStr(cmd);
+            Plan *plan = PlannerCreateQueryPlan(planner, cCmd, transaction);
+            CStringDestroy(cCmd);
             Scan *scan = plan->open(plan);
 
             // 遍历查询结果
@@ -113,7 +118,9 @@ int main() {
                     printf("Unsupported operation: %s\n", operation);
                     break;
                 }
-                PlannerExecuteUpdate(planner, sql, tx);
+                CString *cSql = CStringCreateFromCStr(sql);
+                PlannerExecuteUpdate(planner, cSql, tx);
+                CStringDestroy(cSql);
 
             }
             TransactionCommit(tx);
@@ -123,7 +130,9 @@ int main() {
         }
 
         else {
-            int result = PlannerExecuteUpdate(planner, cmd, transaction);
+            CString *cCmd = CStringCreateFromCStr(cmd);
+            int result = PlannerExecuteUpdate(planner, cCmd, transaction);
+            CStringDestroy(cCmd);
             printf("Command executed. Rows affected: %d\n", result);
         }
     }

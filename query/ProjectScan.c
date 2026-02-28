@@ -13,32 +13,35 @@ bool ProjectScanNext(void *data){
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     return projectScan->s->next(projectScan->s);
 }
-bool ProjectScanHasField(void*data,char *fldname){
+bool ProjectScanHasField(void*data,CString *fldname){
     Scan*scan = (Scan*)data;
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     return ListContains(projectScan->fieldList,fldname);
 }
-int ProjectScanGetInt(void *data,char *fldname){
+int ProjectScanGetInt(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     if(ProjectScanHasField(data,fldname)){
         return projectScan->s->getInt(projectScan->s,fldname);
     }
+    return 0;
 }
-char * ProjectScanGetString(void *data,char *fldname){
+char * ProjectScanGetString(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     if(ProjectScanHasField(data,fldname)){
         return projectScan->s->getString(projectScan->s,fldname);
     }
+    return NULL;
 }
 
-Constant * ProjectScanGetVal(void *data,char *fldname){
+Constant * ProjectScanGetVal(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     if(ProjectScanHasField(data,fldname)){
         return projectScan->s->getVal(projectScan->s,fldname);
     }
+    return NULL;
 }
 void ProjectClose(void *data){
     Scan*scan = (Scan*)data;

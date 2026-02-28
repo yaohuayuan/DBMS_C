@@ -5,32 +5,34 @@
 #include "BasicQueryPlanner.h"
 #include "Parser.h"
 #include "Plan.h"
+#include "CString.h"
+
 BasicQueryPlanner *BasicQueryPlannerInit(MetadataMgr*metadataMgr){
     BasicQueryPlanner *basicQueryPlanner = malloc(sizeof (BasicQueryPlanner));
     basicQueryPlanner->metadataMgr = metadataMgr;
     return basicQueryPlanner;
 }
 Plan *BasicQueryPlannerCreatPlan(BasicQueryPlanner*basicQueryPlanner,QueryData*queryData,Transaction*transaction){
-    List *plans = ListInit(LIST_TYPE_PLAN);
+    List *plans = ListInit(LIST_TYPE_PLAN, NULL, NULL, NULL);
     ListNode *tables = queryData->tables->head;
     while(tables){
-        char *tblName = tables->data->stringData;
-        char *viewDef = MetadataMgrGetViewDef(basicQueryPlanner->metadataMgr,tblName,transaction);
+        CString *tblName = tables->value.stringData;
+        CString *viewDef = MetadataMgrGetViewDef(basicQueryPlanner->metadataMgr,tblName,transaction);
         if(viewDef!=NULL){
-            Parser *parser = ParserInit(viewDef);
+            Parser *parser = ParserInit(CStringGetPtr(viewDef));
             QueryData *view = ParserQuery(parser);
             Plan *plan = BasicQueryPlannerCreatPlan(basicQueryPlanner,view,transaction);
-            ListAppend(plans,plan,sizeof(Plan));
+            ListAppend(plans,plan);
         }else{
             Plan *plan = PlanInit(TablePlanInit(transaction,tblName,basicQueryPlanner->metadataMgr),PLAN_TABLE_CODE);
-            ListAppend(plans,plan,sizeof (Plan));
+            ListAppend(plans,plan);
         }
         tables = tables->next;
     }
     Plan *p = ListRemoveByIndex(plans,0);
     ListNode *head = plans->head;
     while(head){
-        Plan*nextPlan =head->data->planData;
+        Plan*nextPlan = head->value.planData;
         ProductPlan *productPlan = ProductPlanInit(p,nextPlan);
         p = PlanInit(productPlan,PLAN_PRODUCT_CODE);
         head=head->next;

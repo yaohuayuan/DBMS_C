@@ -31,7 +31,7 @@ int ProductPlanRecordsOutput(void *data){
     ProductPlan * productPlan = plan->planUnion.productPlan;
     return productPlan->p1->recordsOutput(productPlan->p1)* productPlan->p2->recordsOutput(productPlan->p2);
 }
-int ProductPlanDistinctValue(void *data,char *fldname){
+int ProductPlanDistinctValue(void *data,CString *fldname){
     Plan*plan = (Plan*)data;
     ProductPlan * productPlan = plan->planUnion.productPlan;
     if(SchemaHasField(productPlan->p1->schema(productPlan->p1),fldname)){

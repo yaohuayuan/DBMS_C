@@ -3,9 +3,10 @@
 //
 
 #include "CreateViewData.h"
-CreateViewData *CreateViewDataInit(char *string,QueryData*queryData){
+#include "CString.h"
+CreateViewData *CreateViewDataInit(CString *viewname,QueryData*queryData){
     CreateViewData *createViewData = malloc(sizeof (CreateViewData));
-    createViewData->viewName = strdup(string);
+    createViewData->viewName = CStringCreateFromCString(viewname);
     createViewData->queryData = queryData;
     return createViewData;
 }

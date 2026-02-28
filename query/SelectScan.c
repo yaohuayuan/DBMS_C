@@ -24,22 +24,22 @@ bool SelectScanNext(void *data){
     }
     return false;
 }
-int SelectScanGetInt(void *data,char *fldname){
+int SelectScanGetInt(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     return selectScan->s->getInt(selectScan->s,fldname);
 }
-char * SelectScanGetString(void *data,char *fldname){
+char * SelectScanGetString(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     return selectScan->s->getString(selectScan->s,fldname);
 }
-Constant *SelectScanGetVal(void *data,char *fldname){
+Constant *SelectScanGetVal(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     return selectScan->s->getVal(selectScan->s,fldname);
 }
-bool SelectScanHasField(void *data,char *fldname){
+bool SelectScanHasField(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     return selectScan->s->hasField(selectScan->s,fldname);
@@ -49,17 +49,17 @@ void SelectScanClose(void *data){
     SelectScan *selectScan = scan->scanUnion.selectScan;
     selectScan->s->close(selectScan->s);
 }
-void SelectScanSetInt(void *data,char *fldname,int val){
+void SelectScanSetInt(void *data,CString *fldname,int val){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     selectScan->s->setInt(selectScan->s,fldname,val);
 }
-void SelectScanSetString(void *data,char *fldname,char * val){
+void SelectScanSetString(void *data,CString *fldname,CString * val){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     selectScan->s->setString(selectScan->s,fldname,val);
 }
-void SelectScanSetVal(void *data,char *fldname,Constant *val){
+void SelectScanSetVal(void *data,CString *fldname,Constant *val){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     selectScan->s->setVal(selectScan->s,fldname,val);

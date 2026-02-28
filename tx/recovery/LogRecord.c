@@ -68,7 +68,8 @@ SetStringRecord* SetStringRecordInit(Page* page) {
     int opos = bpos + sizeof(int);
     record->Offset = PageGetInt(page, opos);
     int vpos = opos + sizeof(int);
-    record->Val = PageGetString(page, vpos);
+    CString *valCString = PageGetString(page, vpos);
+    record->Val = CStringGetPtr(valCString);
 
     return record;
 }
@@ -190,7 +191,9 @@ LogRecordCode SetStringRecordOP() {
 void SetStringUndo(Transaction*transaction,LogRecord*logRecord){
     SetStringRecord *setStringRecord = logRecord->LogRecordData.setStringRecord;
     TransactionPin(transaction,setStringRecord->BlockId);
-    TransactionSetString(transaction,setStringRecord->BlockId,setStringRecord->Offset,setStringRecord->Val,false);
+    CString *valCString = CStringCreateFromCStr(setStringRecord->Val);
+    TransactionSetString(transaction,setStringRecord->BlockId,setStringRecord->Offset,valCString,false);
+    CStringDestroy(valCString);
     TransactionUnPin(transaction,setStringRecord->BlockId);
 }
 int SetStringTxNumber(LogRecord *logRecord){

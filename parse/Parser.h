@@ -14,6 +14,7 @@
 #include "CreateIndexData.h"
 #include "CreateViewData.h"
 #include "CreateTableData.h"
+#include "CString.h"
 typedef struct Parser{
     Lexer *lexer;
 }Parser;
@@ -45,14 +46,14 @@ typedef struct CommandData {
  * @param s 待解析的字符串
  * @return 返回解析器指针
  */
-Parser *ParserInit(char *s);
+Parser *ParserInit(const char *s);
 
 /**
  * 解析字段名
  * @param parser 解析器指针
  * @return 返回解析出的字段名字符串
  */
-char *ParserField(Parser*parser);
+CString *ParserField(Parser*parser);
 
 /**
  * 解析常量值
@@ -144,7 +145,7 @@ CommandData* ParserModify(Parser*parser);
  * @param fldname 字段名字符串
  * @return 返回解析出的字段类型结构体指针
  */
-Schema *ParserFieldType(Parser *parser,char *fldname);
+Schema *ParserFieldType(Parser *parser,CString *fldname);
 
 /**
  * 解析字段定义

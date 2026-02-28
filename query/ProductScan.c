@@ -23,7 +23,7 @@ bool ProductScanNext(void*data){
             productScan->s1->next(productScan->s1);
     }
 }
-int ProductScanGetInt(void *data,char *fldname){
+int ProductScanGetInt(void *data,CString *fldname){
     Scan *scan = (Scan*)data;
     ProductScan *productScan = scan->scanUnion.productScan;
     if(productScan->s1->hasField(productScan->s1,fldname)){
@@ -32,7 +32,7 @@ int ProductScanGetInt(void *data,char *fldname){
         return productScan->s2->getInt(productScan->s2,fldname);
     }
 }
-char * ProductScanGetString(void *data,char *fldname){
+char * ProductScanGetString(void *data,CString *fldname){
     Scan *scan = (Scan*)data;
     ProductScan *productScan = scan->scanUnion.productScan;
     if(productScan->s1->hasField(productScan->s1,fldname)){
@@ -41,7 +41,7 @@ char * ProductScanGetString(void *data,char *fldname){
         return productScan->s2->getString(productScan->s2,fldname);
     }
 }
-Constant * ProductScanGetVal(void *data,char *fldname){
+Constant * ProductScanGetVal(void *data,CString *fldname){
     Scan *scan = (Scan*)data;
     ProductScan *productScan = scan->scanUnion.productScan;
     if(productScan->s1->hasField(productScan->s1,fldname)){
@@ -50,7 +50,7 @@ Constant * ProductScanGetVal(void *data,char *fldname){
         return productScan->s2->getVal(productScan->s2,fldname);
     }
 }
-bool ProductScanHasField(void *data,char *fldname){
+bool ProductScanHasField(void *data,CString *fldname){
     Scan *scan = (Scan*)data;
     ProductScan *productScan = scan->scanUnion.productScan;
     return productScan->s1->hasField(productScan->s1,fldname) || productScan->s2->hasField(productScan->s2,fldname);

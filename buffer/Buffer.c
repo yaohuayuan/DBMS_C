@@ -12,8 +12,9 @@ Buffer * BufferInit(FileManager *fileManager,LogManager *logManager){
     buffer->fileManager = fileManager;
     buffer->logManager = logManager;
     buffer->page = PageInit(fileManager->blockSize);
-    buffer->blockId = BlockIDInit(CStringCreateFromCStr(""),-1);
+    buffer->blockId = NULL;
     buffer->lastUsed = time(NULL);
+    buffer->frame_id = -1;
     return buffer;
 }
 void BufferSetModified(Buffer *buffer, int txNum,int lsn){
@@ -23,12 +24,22 @@ void BufferSetModified(Buffer *buffer, int txNum,int lsn){
     }
 }
 void BufferFlush(Buffer *buffer){
-    if(buffer->txNum>=0){
-        LogManagerFlushLSN(buffer->logManager,buffer->lsn);
-        FileManagerWrite(buffer->fileManager,buffer->blockId,buffer->page);
-        buffer->txNum = -1;
+    if(buffer == NULL)
+        return;
+
+    if(buffer->blockId == NULL)
+        return;
+    if(buffer->txNum < 0)
+        return;
+
+    if(buffer->lsn >= 0){
+        LogManagerFlushLSN(buffer->logManager, buffer->lsn);
     }
+
+    FileManagerWrite(buffer->fileManager, buffer->blockId, buffer->page);
+    buffer->txNum = -1;
 }
+
 bool BufferIsPinned(Buffer *buffer){
     return buffer->pins>0;
 }
@@ -46,3 +57,4 @@ void BufferAssignToBlock(Buffer *buffer,BlockID *blockId){
     FileManagerRead(buffer->fileManager,blockId,buffer->page);
     buffer->pins = 0;
 }
+

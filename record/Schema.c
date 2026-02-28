@@ -17,7 +17,7 @@ Schema *SchemaInit() {
         return NULL;
     }
 
-    schema->fields = NULL;
+    schema->fields = NULL; // 保持为NULL，因为添加第一个字段时会设置
     schema->MapFileInfo = malloc(sizeof(map_FileInfo_t));
     if (!schema->MapFileInfo) {
         free(schema);
@@ -29,7 +29,7 @@ Schema *SchemaInit() {
 }
 
 // 添加字段到Schema
-void SchemaAddField(Schema *schema, char *FldName, int type, int length) {
+void SchemaAddField(Schema *schema, CString *FldName, int type, int length) {
     if (!schema || !FldName) {
         return;
     }
@@ -40,7 +40,7 @@ void SchemaAddField(Schema *schema, char *FldName, int type, int length) {
     if (!newFieldNode) {
         return;
     }
-    newFieldNode->fileName = strdup(FldName);
+    newFieldNode->fileName = CStringCreateFromCString(FldName);
     newFieldNode->type = type;
     newFieldNode->length = length;
     newFieldNode->next = NULL;
@@ -59,26 +59,25 @@ void SchemaAddField(Schema *schema, char *FldName, int type, int length) {
     // 创建新FileInfo并添加到哈希映射
     FileInfo *fileInfo = FileInfoInit(type, length);
     if (!fileInfo) {
-        free(newFieldNode->fileName);
+        CStringDestroy(newFieldNode->fileName);
         free(newFieldNode);
         return;
     }
-//    map_set(schema->MapFileInfo, newFieldNode->fileName, *fileInfo);
-    // 使用&fileInfo而不是fileInfo
-    if (map_set(schema->MapFileInfo, newFieldNode->fileName, *fileInfo) != 0) {
+    // 使用CStringGetPtr获取C风格字符串指针
+    if (map_set(schema->MapFileInfo, CStringGetPtr(newFieldNode->fileName), *fileInfo) != 0) {
         free(fileInfo);
-        free(newFieldNode->fileName);
+        CStringDestroy(newFieldNode->fileName);
         free(newFieldNode);
     }
 }
 
 // 添加整数字段
-void SchemaAddIntField(Schema *schema, char *FldName) {
-    SchemaAddField(schema, FldName, FILE_INFO_CODE_INTEGER, 0);
+void SchemaAddIntField(Schema *schema, CString *FldName) {
+    SchemaAddField(schema, FldName, FILE_INFO_CODE_INTEGER, 4);
 }
 
 // 添加字符串字段
-void SchemaAddStringField(Schema *schema, char *FldName, int length) {
+void SchemaAddStringField(Schema *schema, CString *FldName, int length) {
     SchemaAddField(schema, FldName, FILE_INFO_CODE_VARCHAR, length);
 }
 
@@ -90,7 +89,7 @@ void SchemaFree(Schema *schema) {
     FieldNode *current = schema->fields;
     while (current) {
         FieldNode *next = current->next;
-        free(current->fileName);
+        CStringDestroy(current->fileName);
         free(current);
         current = next;
     }
@@ -103,31 +102,30 @@ void SchemaFree(Schema *schema) {
 
     free(schema);
 }
-FileInfoCode SchemaType(Schema* schema,char* FldName){
-    FileInfo *fileInfo= (FileInfo*)map_get(schema->MapFileInfo,FldName);
+FileInfoCode SchemaType(Schema* schema, CString *FldName){
+    FileInfo *fileInfo= (FileInfo*)map_get(schema->MapFileInfo, CStringGetPtr(FldName));
     return fileInfo->type;
 }
-int SchemaLength(Schema* schema,char* FldName){
-    FileInfo *fileInfo= (FileInfo*)map_get(schema->MapFileInfo,FldName);
+int SchemaLength(Schema* schema, CString *FldName){
+    FileInfo *fileInfo= (FileInfo*)map_get(schema->MapFileInfo, CStringGetPtr(FldName));
     return fileInfo->length;
 }
-void SchemaAdd(Schema *SchemaTo,char* FldName,Schema *SchemaFrom){
-    int type = SchemaType(SchemaFrom,FldName);
-    int length = SchemaLength(SchemaFrom,FldName);
-    SchemaAddField(SchemaTo,FldName,type,length);
+void SchemaAdd(Schema *SchemaTo, CString *FldName, Schema *SchemaFrom){
+    int type = SchemaType(SchemaFrom, FldName);
+    int length = SchemaLength(SchemaFrom, FldName);
+    SchemaAddField(SchemaTo, FldName, type, length);
 }
-void SchemaAddAll(Schema *SchemaTo,Schema *SchemaFrom){
+void SchemaAddAll(Schema *SchemaTo, Schema *SchemaFrom){
     FieldNode* fieldNode = SchemaFrom->fields;
     while(fieldNode!=NULL){
-
-        SchemaAdd(SchemaTo,fieldNode->fileName,SchemaFrom);
+        SchemaAdd(SchemaTo, fieldNode->fileName, SchemaFrom);
         fieldNode = fieldNode->next;
     }
 }
-bool SchemaHasField(Schema *schema,char* FldName){
+bool SchemaHasField(Schema *schema, CString *FldName){
     FieldNode* fieldNode = schema->fields;
     while(fieldNode!=NULL){
-        if(strcmp(FldName,fieldNode->fileName)==0)
+        if(CStringCompare(FldName, fieldNode->fileName) == 0)
             return true;
         fieldNode = fieldNode->next;
     }

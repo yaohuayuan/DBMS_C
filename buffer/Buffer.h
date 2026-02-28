@@ -18,6 +18,7 @@ typedef struct Buffer{
     int txNum;
     int lsn;
     time_t lastUsed;   // 最近使用时间
+    int frame_id;
 }Buffer;
 /**
  * 初始化一个新的 Buffer。

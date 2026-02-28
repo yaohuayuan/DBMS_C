@@ -3,9 +3,10 @@
 //
 
 #include "DeleteData.h"
-DeleteData *DeleteDataInit(char *tblname,Predicate*predicate){
+#include "CString.h"
+DeleteData *DeleteDataInit(CString *tblname,Predicate*predicate){
     DeleteData * deleteData = malloc(sizeof (DeleteData));
     deleteData->predicate = predicate;
-    deleteData->tblname = strdup(tblname);
+    deleteData->tblname = CStringCreateFromCString(tblname);
     return deleteData;
 }

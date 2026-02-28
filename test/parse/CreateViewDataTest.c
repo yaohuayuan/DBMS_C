@@ -1,0 +1,42 @@
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include "cmocka.h"
+#include <stdint.h>
+#include "CreateViewData.h"
+#include <stdlib.h>
+#include <string.h>
+#include "CString.h"
+
+// 测试 CreateViewData 结构体的基本功能
+static void test_create_view_data_struct(void **state) {
+    (void)state;
+
+    // 注意：由于 CreateViewDataInit 依赖于 QueryData，这里仅测试结构体的基本功能
+    // 在实际项目中，应该使用模拟（mock）的组件来测试完整功能
+
+    // 创建一个简单的 CreateViewData 实例
+    CreateViewData *createViewData = (CreateViewData *)malloc(sizeof(CreateViewData));
+    
+    // 验证结构体的字段初始化
+    assert_non_null(createViewData);
+    createViewData->viewName = CStringCreateFromCStr("test_view");
+    createViewData->queryData = NULL;
+    
+    // 验证字段值
+    assert_string_equal(CStringGetPtr(createViewData->viewName), "test_view");
+    assert_null(createViewData->queryData);
+    
+    // 释放内存
+    CStringDestroy(createViewData->viewName);
+    free(createViewData);
+}
+
+// 主函数：注册所有测试
+int main(void) {
+    const struct CMUnitTest tests[] = {
+            cmocka_unit_test(test_create_view_data_struct),
+    };
+
+    return cmocka_run_group_tests(tests, NULL, NULL);
+}

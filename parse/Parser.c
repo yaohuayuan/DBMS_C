@@ -5,7 +5,7 @@
 #include "Parser.h"
 #include "Expression.h"
 #include "Term.h"
-Parser *ParserInit(char *s){
+Parser *ParserInit(const char *s){
     Parser  *parser = malloc(sizeof (Parser));
     parser->lexer = LexerInit(s);
 
@@ -14,8 +14,8 @@ Parser *ParserInit(char *s){
 //    printf("test");
     return parser;
 }
-char *ParserField(Parser*parser){
-    return LexerEatId(parser->lexer);
+CString *ParserField(Parser*parser){
+    return CStringCreateFromCStr(LexerEatId(parser->lexer));
 }
 Constant *ParserConstant(Parser*parser){
     if(LexerMatchStringConstant(parser->lexer)){
@@ -26,7 +26,11 @@ Constant *ParserConstant(Parser*parser){
 }
 Expression *ParserExpression(Parser*parser){
     if(LexerMatchId(parser->lexer)){
-        return ExpressionInitFieldName(ParserField(parser));
+        CString *fldname = ParserField(parser);
+        const char *fldnameStr = CStringGetPtr(fldname);
+        Expression *expr = ExpressionInitFieldName(fldnameStr);
+        CStringDestroy(fldname);
+        return expr;
     }else{
         return ExpressionInitConstant(ParserConstant(parser));
     }
@@ -45,9 +49,11 @@ Predicate *ParserPredicate(Parser*parser){
     }
     return predicate;
 }
+
+
 List* ParserSelectList(Parser*parser){
-    List* l = ListInit(LIST_TYPE_STRING);
-    ListAppend(l, ParserField(parser),sizeof(ParserField(parser)));
+    List* l = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+    ListAppend(l, ParserField(parser));
     if(LexerMatchDelim(parser->lexer,',')){
         LexerEatDelim(parser->lexer,',');
         ListAddAll(l, ParserSelectList(parser));
@@ -55,11 +61,12 @@ List* ParserSelectList(Parser*parser){
     return l;
 }
 List* ParserTabletList(Parser*parser){
-    List* l = ListInit(LIST_TYPE_STRING);
-    ListAppend(l,LexerEatId(parser->lexer),sizeof(LexerEatId(parser->lexer)));
+    List* l = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
+    ListAppend(l, tblname);
     if(LexerMatchDelim(parser->lexer,',')){
         LexerEatDelim(parser->lexer,',');
-        ListAddAll(l, ParserSelectList(parser));
+        ListAddAll(l, ParserTabletList(parser));
     }
     return l;
 }
@@ -78,7 +85,7 @@ QueryData *ParserQuery(Parser*parser){
 CommandData* ParserDelete(Parser*parser){
     LexerEatKeyWord(parser->lexer,"delete");
     LexerEatKeyWord(parser->lexer,"from");
-    char *tblname = LexerEatId(parser->lexer);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     Predicate *predicate = PredicateInit(NULL);
     if(LexerMatchKeyWord(parser->lexer,"where")){
         LexerEatKeyWord(parser->lexer,"where");
@@ -90,8 +97,8 @@ CommandData* ParserDelete(Parser*parser){
     return commandData;
 }
 List* ParserFieldList(Parser *parser){
-    List *l = ListInit(LIST_TYPE_STRING);
-    ListAppend(l, ParserField(parser),sizeof (ParserField(parser)));
+    List *l = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+    ListAppend(l, ParserField(parser));
     if(LexerMatchDelim(parser->lexer,',')){
         LexerEatDelim(parser->lexer,',');
         ListAddAll(l, ParserFieldList(parser));
@@ -99,8 +106,8 @@ List* ParserFieldList(Parser *parser){
     return l;
 }
 List* ParserConstantList(Parser *parser){
-    List *l = ListInit(LIST_TYPE_CONSTANT);
-    ListAppend(l, ParserConstant(parser),sizeof(Constant));
+    List *l = ListInit(LIST_TYPE_CONSTANT, NULL, NULL, NULL);
+    ListAppend(l, ParserConstant(parser));
     if(LexerMatchDelim(parser->lexer,',')){
         LexerEatDelim(parser->lexer,',');
         ListAddAll(l, ParserConstantList(parser));
@@ -110,7 +117,7 @@ List* ParserConstantList(Parser *parser){
 CommandData* ParserInsert(Parser*parser){
     LexerEatKeyWord(parser->lexer,"insert");
     LexerEatKeyWord(parser->lexer,"into");
-    char *tblname = LexerEatId(parser->lexer);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     LexerEatDelim(parser->lexer,'(');
     List *fld = ParserFieldList(parser);
     LexerEatDelim(parser->lexer,')');
@@ -124,9 +131,9 @@ CommandData* ParserInsert(Parser*parser){
 }
 CommandData* ParserModify(Parser*parser){
     LexerEatKeyWord(parser->lexer,"update");
-    char *tblname = LexerEatId(parser->lexer);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     LexerEatKeyWord(parser->lexer,"set");
-    char *fldname = ParserField(parser);
+    CString *fldname = ParserField(parser);
     LexerEatDelim(parser->lexer,'=');
     Expression *expression = ParserExpression(parser);
     Predicate *predicate = PredicateInit(NULL);
@@ -140,7 +147,7 @@ CommandData* ParserModify(Parser*parser){
     commandData->data.modifyData = ModifyDataInit(tblname,fldname,expression,predicate);
     return commandData;
 }
-Schema *ParserFieldType(Parser *parser,char *fldname){
+Schema *ParserFieldType(Parser *parser,CString *fldname){
     Schema *schema = SchemaInit();
     if(LexerMatchKeyWord(parser->lexer,"int")){
         LexerEatKeyWord(parser->lexer,"int");
@@ -156,7 +163,7 @@ Schema *ParserFieldType(Parser *parser,char *fldname){
 
 }
 Schema *ParserFieldDef(Parser*parser){
-    char *fldname = ParserField(parser);
+    CString *fldname = ParserField(parser);
     return ParserFieldType(parser,fldname);
 }
 Schema *ParserFieldDefs(Parser*parser){
@@ -170,7 +177,7 @@ Schema *ParserFieldDefs(Parser*parser){
 }
 CommandData* ParserCreateTable(Parser*parser){
     LexerEatKeyWord(parser->lexer,"table");
-    char *tblname = LexerEatId(parser->lexer);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     LexerEatDelim(parser->lexer,'(');
     Schema *schema = ParserFieldDefs(parser);
     LexerEatDelim(parser->lexer,')');
@@ -182,7 +189,7 @@ CommandData* ParserCreateTable(Parser*parser){
 }
 CommandData* ParserCreateView(Parser*parser){
     LexerEatKeyWord(parser->lexer,"view");
-    char *tblname = LexerEatId(parser->lexer);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     LexerEatKeyWord(parser->lexer,"as");
     QueryData *queryData = ParserQuery(parser);
 
@@ -194,11 +201,11 @@ CommandData* ParserCreateView(Parser*parser){
 }
 CommandData* ParserCreateIndex(Parser*parser){
     LexerEatKeyWord(parser->lexer,"index");
-    char *idxname = LexerEatId(parser->lexer);
+    CString *idxname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     LexerEatKeyWord(parser->lexer,"on");
-    char *tblname = LexerEatId(parser->lexer);
+    CString *tblname = CStringCreateFromCStr(LexerEatId(parser->lexer));
     LexerEatDelim(parser->lexer,'(');
-    char *fldname = ParserField(parser);
+    CString *fldname = ParserField(parser);
     LexerEatDelim(parser->lexer,')');
 
 

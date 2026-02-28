@@ -18,21 +18,21 @@ int RecordPageOffset(RecordPage *recordPage,int slot){
     return slot*recordPage->layout->SlotSize;
 
 }
-int RecordPageGetInt(RecordPage *recordPage,int slot,char *fldName){
+int RecordPageGetInt(RecordPage *recordPage,int slot,CString *fldName){
     int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
     return TransactionGetInt(recordPage->transaction,recordPage->blockId,fldPos);
 }
- const char *RecordPageGetString(RecordPage *recordPage,int slot,char*fldName){
+ const char *RecordPageGetString(RecordPage *recordPage,int slot,CString*fldName){
     int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
     return CStringGetPtr(TransactionGetString(recordPage->transaction,recordPage->blockId,fldPos)) ;
 }
-void RecordSetInt(RecordPage*recordPage,int slot,char *fldName,int val){
+void RecordSetInt(RecordPage*recordPage,int slot,CString *fldName,int val){
     int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
     TransactionSetInt(recordPage->transaction,recordPage->blockId,fldPos,val,true);
 }
-void RecordSetString(RecordPage*recordPage,int slot,char *fldName,char* val){
+void RecordSetString(RecordPage*recordPage,int slot,CString *fldName,CString* val){
     int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
-    TransactionSetString(recordPage->transaction,recordPage->blockId,fldPos, CStringCreateFromCStr(val),true);
+    TransactionSetString(recordPage->transaction,recordPage->blockId,fldPos, val,true);
 }
 void RecordPageSetFlag(RecordPage*recordPage,int slot,int flag){
     TransactionSetInt(recordPage->transaction,recordPage->blockId, RecordPageOffset(recordPage,slot),flag,true);
@@ -45,22 +45,22 @@ bool RecordPageIsValidSlot(RecordPage*recordPage,int slot){
 }
 int RecordPageSearchAfter(RecordPage*recordPage, int slot, int flag) {
     slot++;
-//    printf("DEBUG: RecordPageSearchAfter - ¿ªÊ¼ËÑË÷´Óslot %d, ²éÕÒflag %d\n", slot, flag);
+//    printf("DEBUG: RecordPageSearchAfter - ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½slot %d, ï¿½ï¿½ï¿½ï¿½flag %d\n", slot, flag);
 
     while (RecordPageIsValidSlot(recordPage, slot)) {
         int offset = RecordPageOffset(recordPage, slot);
         int currentFlag = TransactionGetInt(recordPage->transaction, recordPage->blockId, offset);
 
-//        printf("DEBUG: slot %d, offset %d, ¶ÁÈ¡µ½µÄflag %d, ÆÚÍûflag %d\n",
+//        printf("DEBUG: slot %d, offset %d, ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½flag %d, ï¿½ï¿½ï¿½ï¿½flag %d\n",
 //               slot, offset, currentFlag, flag);
 
         if(currentFlag == flag) {
-//            printf("DEBUG: ÕÒµ½Æ¥ÅäµÄslot %d\n", slot);
+//            printf("DEBUG: ï¿½Òµï¿½Æ¥ï¿½ï¿½ï¿½slot %d\n", slot);
             return slot;
         }
         slot++;
     }
-//    printf("DEBUG: Ã»ÓÐÕÒµ½Æ¥ÅäµÄslot\n");
+//    printf("DEBUG: Ã»ï¿½ï¿½ï¿½Òµï¿½Æ¥ï¿½ï¿½ï¿½slot\n");
     return -1;
 }
 void RecordPageFormat(RecordPage *recordPage){
@@ -71,9 +71,9 @@ void RecordPageFormat(RecordPage *recordPage){
         FieldNode*fieldNode = schema->fields;
         while (fieldNode!=NULL){
             int offset = RecordPageOffset(recordPage, slot);
-//            printf("DEBUG: ¸ñÊ½»¯slot %d, offset %d, ÉèÖÃflagÎª %d\n",
+//            printf("DEBUG: ï¿½ï¿½Ê½ï¿½ï¿½slot %d, offset %d, ï¿½ï¿½ï¿½ï¿½flagÎª %d\n",
 //                   slot, offset, RECORD_PAGE_EMPTY);
-            char *fldName = fieldNode->fileName;
+            CString *fldName = fieldNode->fileName;
             int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
             if(SchemaType(schema,fldName)==FILE_INFO_CODE_INTEGER){
                 TransactionSetInt(recordPage->transaction,recordPage->blockId,fldPos,0,false);
@@ -84,7 +84,7 @@ void RecordPageFormat(RecordPage *recordPage){
         }
         slot++;
     }
-//    printf("DEBUG: RecordPageFormat - ¸ñÊ½»¯Íê³É\n");
+//    printf("DEBUG: RecordPageFormat - ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½\n");
 }
 int RecordPageInsertAfter(RecordPage*recordPage,int slot){
     int newSlot = RecordPageSearchAfter(recordPage,slot,RECORD_PAGE_EMPTY);

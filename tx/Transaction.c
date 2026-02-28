@@ -76,7 +76,7 @@ void TransactionSetString(Transaction*transaction,BlockID *blockId,int offset,CS
     Buffer *buffer = BufferListGetBuffer(transaction->bufferList,blockId);
     int lsn = -1;
     if(okToLog){
-        lsn = RecoverySetString(transaction->recoveryManager,buffer,offset,val);
+        lsn = RecoverySetString(transaction->recoveryManager,buffer,offset,CStringGetPtr(val));
     }
     Page *page = buffer->page;
     PageSetString(page,offset,val);

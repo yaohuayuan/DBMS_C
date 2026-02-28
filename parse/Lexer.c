@@ -63,5 +63,5 @@ char* LexerEatIDConstant(Lexer *lexer){
 char * LexerEatId(Lexer*lexer){
     char * s = strdup(lexer->tokenizer->sValue);
     StreamTokenizerNext(lexer->tokenizer);
-    return strdup(s);
+    return s;
 }
