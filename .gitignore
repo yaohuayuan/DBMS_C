@@ -37,14 +37,18 @@ cmake-build-debug/.idea/
 # 日志文件
 *.log
 
-# 其他可能生成的二进制文件
+# 其他可能生成的二进制文件（但保留 external 下的第三方库）
 *.dll
 *.so
 *.dylib
+!external/**/*.dll    # 不忽略 external 目录及其子目录下的 DLL
+!external/**/*.so     # 不忽略 external 目录及其子目录下的 SO
+!external/**/*.dylib  # 不忽略 external 目录及其子目录下的 DYLIB
 
-# 忽略测试输出目录
+# 忽略测试输出目录和构建生成的 bin（但保留 external 下的 bin）
+bin/                  # 忽略根目录及其他地方的 bin
+!external/**/bin/     # 不忽略 external 目录下的 bin
 cmake-build-debug/Testing/Temporary/
-bin/
 build/
 cmake-build-debug*
 *.o

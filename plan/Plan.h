@@ -60,4 +60,13 @@ typedef struct Plan{
  * @return 返回初始化后的 Plan 指针。
  */
 Plan *PlanInit(void *data,PLAN_CODE code);
+
+/**
+ * @brief 检查计划是否包含指定的表。
+ *
+ * @param plan 指向 Plan 实例的指针。
+ * @param tableName 表名。
+ * @return 如果计划包含指定的表，返回 true；否则返回 false。
+ */
+bool PlanContainsTable(Plan *plan, CString *tableName);
 #endif //DBMS_C_PLAN_H

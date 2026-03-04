@@ -8,32 +8,53 @@ project(NewDBMS VERSION 1.0.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# 可执行文件输出路径
+# 可执行文件输出路径（所有配置统一输出到 bin）
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_SOURCE_DIR}/bin)
 
-# 查找 CMocka 库
+# ========== CMocka 配置 ==========
 set(CMOCKA_ROOT ${PROJECT_SOURCE_DIR}/external/cmocka-1.1.0)
-include_directories(${CMOCKA_ROOT}/include)
+set(HAVE_CMOCKA FALSE)
 
-# 根据操作系统找到并链接正确的 cmocka 库
-if(WIN32)
-    # 在 Windows 上，查找 cmocka 的 DLL 文件
-    find_library(CMOCKA_LIBRARY NAMES cmocka.dll libcmocka.a
-            PATHS ${CMOCKA_ROOT}/bin ${CMOCKA_ROOT}/lib
-            NO_DEFAULT_PATH)
-elseif(UNIX)
-    # 在 Linux 和 macOS 上，查找 cmocka 的共享对象文件 (.so)
-    find_library(CMOCKA_LIBRARY NAMES cmocka libcmocka.a libcmocka.so
-            PATHS ${CMOCKA_ROOT}/lib ${CMOCKA_ROOT}/bin
-            NO_DEFAULT_PATH)
+# 检查头文件
+if(EXISTS ${CMOCKA_ROOT}/include/cmocka.h)
+    include_directories(${CMOCKA_ROOT}/include)
+    message(STATUS "Found CMocka headers: ${CMOCKA_ROOT}/include")
+else()
+    message(WARNING "CMocka headers not found at ${CMOCKA_ROOT}/include")
 endif()
 
-# 如果没有找到 cmocka 库，则报错
-if(NOT CMOCKA_LIBRARY)
-    message(FATAL_ERROR "Could not find cmocka library. Please check your external directory and ensure the correct library file is present for your OS.\n\nExpected locations:\n  Windows: ${CMOCKA_ROOT}/bin or ${CMOCKA_ROOT}/lib\n  Linux/Unix: ${CMOCKA_ROOT}/lib or ${CMOCKA_ROOT}/bin")
+# 查找导入库（.dll.a）
+find_library(CMOCKA_LIBRARY
+        NAMES cmocka libcmocka libcmocka.dll.a
+        PATHS ${CMOCKA_ROOT}/lib
+        NO_DEFAULT_PATH
+)
+
+# 查找 DLL（在 bin 目录）
+find_file(CMOCKA_DLL
+        NAMES cmocka.dll libcmocka.dll
+        PATHS ${CMOCKA_ROOT}/bin
+        NO_DEFAULT_PATH
+)
+
+# 验证
+if(CMOCKA_LIBRARY AND CMOCKA_DLL)
+    set(HAVE_CMOCKA TRUE)
+    message(STATUS "Found CMocka library: ${CMOCKA_LIBRARY}")
+    message(STATUS "Found CMocka DLL: ${CMOCKA_DLL}")
+else()
+    set(HAVE_CMOCKA FALSE)
+    if(NOT CMOCKA_LIBRARY)
+        message(WARNING "CMocka library (.dll.a) not found in ${CMOCKA_ROOT}/lib")
+    endif()
+    if(NOT CMOCKA_DLL)
+        message(WARNING "CMocka DLL not found in ${CMOCKA_ROOT}/bin - 请检查文件是否存在")
+    endif()
 endif()
 
-# 设置文件夹路径
+# ========== 目录设置 ==========
 set(LIB_DIR ${PROJECT_SOURCE_DIR}/Lib)
 set(FILE_DIR ${PROJECT_SOURCE_DIR}/File)
 set(TEST_DIR ${PROJECT_SOURCE_DIR}/test)
@@ -48,14 +69,13 @@ set(PLAN_DIR ${PROJECT_SOURCE_DIR}/plan)
 set(PARSE_DIR ${PROJECT_SOURCE_DIR}/parse)
 set(INDEX_DIR ${PROJECT_SOURCE_DIR}/index)
 
-# 获取源文件
+# ========== 源文件 ==========
 set(LIB_SOURCES
         ${LIB_DIR}/ByteBuffer.c
         ${LIB_DIR}/CString.c
         ${LIB_DIR}/CVector.c
         ${LIB_DIR}/RBT.c
         ${LIB_DIR}/CMap.c
-        ${LIB_DIR}/rwlock.h
         ${LIB_DIR}/Error.c
         ${LIB_DIR}/map.c
         ${LIB_DIR}/Trie.c
@@ -78,8 +98,6 @@ set(BUFFER_SOURCES
         ${BUFFER_DIR}/BufferManager.c
         ${BUFFER_DIR}/LRU/LRUCore.c
         ${BUFFER_DIR}/LRU/LRUPolicy.c
-
-
 )
 
 set(TX_SOURCES
@@ -157,7 +175,7 @@ set(DB_SOURCES
         ${DB_DIR}/DBMS.c
 )
 
-# 添加核心库
+# ========== 核心库 ==========
 add_library(core STATIC
         ${LIB_SOURCES}
         ${FILE_SOURCES}
@@ -171,10 +189,8 @@ add_library(core STATIC
         ${PARSE_SOURCES}
         ${INDEX_SOURCES}
         ${DB_SOURCES}
-
 )
 
-# 包含目录
 target_include_directories(core PUBLIC
         ${LIB_DIR}
         ${FILE_DIR}
@@ -193,98 +209,115 @@ target_include_directories(core PUBLIC
         ${TEST_DIR}
 )
 
-# 主程序
+# ========== 主程序 ==========
 add_executable(NewDBMS main.c)
 target_link_libraries(NewDBMS core)
 
-# 测试目标宏
+# ========== 测试宏 ==========
 macro(add_cmocka_test TEST_NAME SOURCE_FILE)
-    add_executable(${TEST_NAME} ${SOURCE_FILE})
-    target_link_libraries(${TEST_NAME} core ${CMOCKA_LIBRARY})
-    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    if(HAVE_CMOCKA)
+        add_executable(${TEST_NAME} ${SOURCE_FILE})
+        target_link_libraries(${TEST_NAME} PRIVATE core ${CMOCKA_LIBRARY})
+
+        # 关键：构建时自动复制 DLL 到输出目录
+        if(WIN32 AND CMOCKA_DLL)
+            add_custom_command(TARGET ${TEST_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CMOCKA_DLL} $<TARGET_FILE_DIR:${TEST_NAME}>
+                    COMMENT "Copying ${CMOCKA_DLL} to $<TARGET_FILE_DIR:${TEST_NAME}>"
+            )
+        endif()
+
+        add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    endif()
 endmacro()
 
-# 现有测试
-# File 模块测试
-add_cmocka_test(BlockIDTest ${TEST_DIR}/File/BlockIDTest.c)
-add_cmocka_test(PageTest ${TEST_DIR}/File/PageTest.c)
-add_cmocka_test(FileManagerTest ${TEST_DIR}/File/FileManagerTest.c)
+# ========== 测试注册 ==========
+if(HAVE_CMOCKA)
+    message(STATUS "Registering tests...")
 
-# Lib 模块测试
-add_cmocka_test(ByteBufferTest ${TEST_DIR}/Lib/ByteBufferTest.c)
-add_cmocka_test(CStringTest ${TEST_DIR}/Lib/CStringTest.c)
-add_cmocka_test(RBTTest ${TEST_DIR}/Lib/RBTTest.c)
-add_cmocka_test(CMapTest ${TEST_DIR}/Lib/CMapTest.c)
-add_cmocka_test(CVectorTest ${TEST_DIR}/Lib/CVectorTest.c)
-add_cmocka_test(ListTest ${TEST_DIR}/Lib/ListTest.c)
-add_cmocka_test(StreamTokenizerTest ${TEST_DIR}/Lib/StreamTokenizerTest.c)
-add_cmocka_test(TrieTest ${TEST_DIR}/Lib/TrieTest.c)
+    # File 模块测试
+    add_cmocka_test(BlockIDTest ${TEST_DIR}/File/BlockIDTest.c)
+    add_cmocka_test(PageTest ${TEST_DIR}/File/PageTest.c)
+    add_cmocka_test(FileManagerTest ${TEST_DIR}/File/FileManagerTest.c)
 
-# Log 模块测试
-add_cmocka_test(LogTest ${TEST_DIR}/Log/LogTest.c)
+    # Lib 模块测试
+    add_cmocka_test(ByteBufferTest ${TEST_DIR}/Lib/ByteBufferTest.c)
+    add_cmocka_test(CStringTest ${TEST_DIR}/Lib/CStringTest.c)
+    add_cmocka_test(RBTTest ${TEST_DIR}/Lib/RBTTest.c)
+    add_cmocka_test(CMapTest ${TEST_DIR}/Lib/CMapTest.c)
+    add_cmocka_test(CVectorTest ${TEST_DIR}/Lib/CVectorTest.c)
+    add_cmocka_test(ListTest ${TEST_DIR}/Lib/ListTest.c)
+    add_cmocka_test(StreamTokenizerTest ${TEST_DIR}/Lib/StreamTokenizerTest.c)
+    add_cmocka_test(TrieTest ${TEST_DIR}/Lib/TrieTest.c)
 
-# Buffer 模块测试
-add_cmocka_test(BufferTest ${TEST_DIR}/buffer/BufferTest.c)
-add_cmocka_test(BufferManagerTest ${TEST_DIR}/buffer/BufferManagerTest.c)
-add_cmocka_test(BufferLRUPolicy ${TEST_DIR}/buffer/LRU/LRUPolicyTest.c)
+    # Log 模块测试
+    add_cmocka_test(LogTest ${TEST_DIR}/Log/LogTest.c)
 
-# TX 模块测试
-add_cmocka_test(TranstionTest ${TEST_DIR}/tx/TranstionTest.c)
-add_cmocka_test(LockTest ${TEST_DIR}/tx/LockTest.c)
+    # Buffer 模块测试
+    add_cmocka_test(BufferTest ${TEST_DIR}/buffer/BufferTest.c)
+    add_cmocka_test(BufferManagerTest ${TEST_DIR}/buffer/BufferManagerTest.c)
+    add_cmocka_test(BufferLRUPolicy ${TEST_DIR}/buffer/LRU/LRUPolicyTest.c)
 
-# Record 模块测试
-add_cmocka_test(RIDTest ${TEST_DIR}/record/RIDTest.c)
-add_cmocka_test(SchemaTest ${TEST_DIR}/record/SchemaTest.c)
-add_cmocka_test(LayoutTest ${TEST_DIR}/record/LayoutTest.c)
-add_cmocka_test(RecordTest ${TEST_DIR}/record/RecordTest.c)
+    # TX 模块测试
+    add_cmocka_test(TranstionTest ${TEST_DIR}/tx/TranstionTest.c)
+    add_cmocka_test(LockTest ${TEST_DIR}/tx/LockTest.c)
 
-# Query 模块测试
-add_cmocka_test(ConstantTest ${TEST_DIR}/query/ConstantTest.c)
-add_cmocka_test(ExpressionTest ${TEST_DIR}/query/ExpressionTest.c)
-add_cmocka_test(TermTest ${TEST_DIR}/query/TermTest.c)
-add_cmocka_test(PredicateTest ${TEST_DIR}/query/PredicateTest.c)
+    # Record 模块测试
+    add_cmocka_test(RIDTest ${TEST_DIR}/record/RIDTest.c)
+    add_cmocka_test(SchemaTest ${TEST_DIR}/record/SchemaTest.c)
+    add_cmocka_test(LayoutTest ${TEST_DIR}/record/LayoutTest.c)
+    add_cmocka_test(RecordTest ${TEST_DIR}/record/RecordTest.c)
 
-# Plan 模块测试
-add_cmocka_test(PlanTest ${TEST_DIR}/plan/PlanTest.c)
-add_cmocka_test(PlannerTest ${TEST_DIR}/plan/PlannerTest.c)
-add_cmocka_test(BasicQueryPlannerTest ${TEST_DIR}/plan/BasicQueryPlannerTest.c)
-add_cmocka_test(BasicUpdatePlannerTest ${TEST_DIR}/plan/BasicUpdatePlannerTest.c)
-add_cmocka_test(TablePlanTest ${TEST_DIR}/plan/TablePlanTest.c)
-add_cmocka_test(SelectPlanTest ${TEST_DIR}/plan/SelectPlanTest.c)
-add_cmocka_test(ProjectPlanTest ${TEST_DIR}/plan/ProjectPlanTest.c)
-add_cmocka_test(ProductPlanTest ${TEST_DIR}/plan/ProductPlanTest.c)
+    # Query 模块测试
+    add_cmocka_test(ConstantTest ${TEST_DIR}/query/ConstantTest.c)
+    add_cmocka_test(ExpressionTest ${TEST_DIR}/query/ExpressionTest.c)
+    add_cmocka_test(TermTest ${TEST_DIR}/query/TermTest.c)
+    add_cmocka_test(PredicateTest ${TEST_DIR}/query/PredicateTest.c)
 
-# Parse 模块测试
-add_cmocka_test(ParserTest ${TEST_DIR}/parse/ParserTest.c)
-add_cmocka_test(LexerTest ${TEST_DIR}/parse/LexerTest.c)
-add_cmocka_test(QueryDataTest ${TEST_DIR}/parse/QueryDataTest.c)
-add_cmocka_test(DeleteDataTest ${TEST_DIR}/parse/DeleteDataTest.c)
-add_cmocka_test(InsertDataTest ${TEST_DIR}/parse/InsertDataTest.c)
-add_cmocka_test(ModifyDataTest ${TEST_DIR}/parse/ModifyDataTest.c)
-add_cmocka_test(CreateViewDataTest ${TEST_DIR}/parse/CreateViewDataTest.c)
-add_cmocka_test(CreateTableDataTest ${TEST_DIR}/parse/CreateTableDataTest.c)
-add_cmocka_test(CreateIndexDataTest ${TEST_DIR}/parse/CreateIndexDataTest.c)
-add_cmocka_test(PredParserTest ${TEST_DIR}/parse/PredParserTest.c)
+    # Plan 模块测试
+    add_cmocka_test(PlanTest ${TEST_DIR}/plan/PlanTest.c)
+    add_cmocka_test(PlannerTest ${TEST_DIR}/plan/PlannerTest.c)
+    add_cmocka_test(BasicQueryPlannerTest ${TEST_DIR}/plan/BasicQueryPlannerTest.c)
+    add_cmocka_test(BasicUpdatePlannerTest ${TEST_DIR}/plan/BasicUpdatePlannerTest.c)
+    add_cmocka_test(TablePlanTest ${TEST_DIR}/plan/TablePlanTest.c)
+    add_cmocka_test(SelectPlanTest ${TEST_DIR}/plan/SelectPlanTest.c)
+    add_cmocka_test(ProjectPlanTest ${TEST_DIR}/plan/ProjectPlanTest.c)
+    add_cmocka_test(ProductPlanTest ${TEST_DIR}/plan/ProductPlanTest.c)
 
-# Metadata 模块测试
-add_cmocka_test(MetadataManagerTest ${TEST_DIR}/metadata/MetadataManagerTest.c)
-add_cmocka_test(TableManagerTest ${TEST_DIR}/metadata/TableManagerTest.c)
-add_cmocka_test(ViewManagerTest ${TEST_DIR}/metadata/ViewManagerTest.c)
-add_cmocka_test(IndexManagerTest ${TEST_DIR}/metadata/IndexManagerTest.c)
-add_cmocka_test(StatManagerTest ${TEST_DIR}/metadata/StatManagerTest.c)
-add_cmocka_test(StatInfoTest ${TEST_DIR}/metadata/StatInfoTest.c)
-add_cmocka_test(IndexInfoTest ${TEST_DIR}/metadata/IndexInfoTest.c)
+    # Parse 模块测试
+    add_cmocka_test(ParserTest ${TEST_DIR}/parse/ParserTest.c)
+    add_cmocka_test(LexerTest ${TEST_DIR}/parse/LexerTest.c)
+    add_cmocka_test(QueryDataTest ${TEST_DIR}/parse/QueryDataTest.c)
+    add_cmocka_test(DeleteDataTest ${TEST_DIR}/parse/DeleteDataTest.c)
+    add_cmocka_test(InsertDataTest ${TEST_DIR}/parse/InsertDataTest.c)
+    add_cmocka_test(ModifyDataTest ${TEST_DIR}/parse/ModifyDataTest.c)
+    add_cmocka_test(CreateViewDataTest ${TEST_DIR}/parse/CreateViewDataTest.c)
+    add_cmocka_test(CreateTableDataTest ${TEST_DIR}/parse/CreateTableDataTest.c)
+    add_cmocka_test(CreateIndexDataTest ${TEST_DIR}/parse/CreateIndexDataTest.c)
+    add_cmocka_test(PredParserTest ${TEST_DIR}/parse/PredParserTest.c)
 
-# Index 模块测试
-add_cmocka_test(HashIndexTest ${TEST_DIR}/index/HashIndexTest.c)
+    # Metadata 模块测试
+    add_cmocka_test(MetadataManagerTest ${TEST_DIR}/metadata/MetadataManagerTest.c)
+    add_cmocka_test(TableManagerTest ${TEST_DIR}/metadata/TableManagerTest.c)
+    add_cmocka_test(ViewManagerTest ${TEST_DIR}/metadata/ViewManagerTest.c)
+    add_cmocka_test(IndexManagerTest ${TEST_DIR}/metadata/IndexManagerTest.c)
+    add_cmocka_test(StatManagerTest ${TEST_DIR}/metadata/StatManagerTest.c)
+    add_cmocka_test(StatInfoTest ${TEST_DIR}/metadata/StatInfoTest.c)
+    add_cmocka_test(IndexInfoTest ${TEST_DIR}/metadata/IndexInfoTest.c)
 
-# DBMS 模块测试
-add_cmocka_test(DBMSTest ${TEST_DIR}/DBMSTest.c)
+    # Index 模块测试
+    add_cmocka_test(HashIndexTest ${TEST_DIR}/index/HashIndexTest.c)
 
-# 安装目标
+    # DBMS 模块测试
+    add_cmocka_test(DBMSTest ${TEST_DIR}/DBMSTest.c)
+
+    enable_testing()
+else()
+    message(STATUS "Tests disabled - CMocka not available")
+endif()
+
+# ========== 安装 ==========
 install(TARGETS NewDBMS
         RUNTIME DESTINATION ${PROJECT_SOURCE_DIR}/bin
 )
-
-# 启用测试
-enable_testing()

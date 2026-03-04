@@ -99,6 +99,46 @@ char* ExpressionToString(Expression *expr) {
     }
 }
 
+// 从表达式中提取表名
+CString* ExpressionGetTableName(Expression *expr) {
+    if (!expr || !expr->fldname) {
+        return NULL;
+    }
+    
+    const char *fldname = CStringGetPtr(expr->fldname);
+    if (!fldname) {
+        return NULL;
+    }
+    
+    // 查找点号位置
+    const char *dot = strchr(fldname, '.');
+    if (!dot) {
+        // 没有表名，只有字段名
+        return NULL;
+    }
+    
+    // 计算表名长度
+    size_t tableNameLength = dot - fldname;
+    if (tableNameLength == 0) {
+        return NULL;
+    }
+    
+    // 提取表名并创建CString
+    char *tableName = (char *)malloc(tableNameLength + 1);
+    if (!tableName) {
+        fprintf(stderr, "Memory allocation failed.");
+        exit(EXIT_FAILURE);
+    }
+    
+    strncpy(tableName, fldname, tableNameLength);
+    tableName[tableNameLength] = '\0';
+    
+    CString *result = CStringCreateFromCStr(tableName);
+    free(tableName);
+    
+    return result;
+}
+
 // 释放表达式资源
 void ExpressionFree(Expression *expr) {
     if (expr->fldname != NULL) {

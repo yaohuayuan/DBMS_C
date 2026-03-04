@@ -92,7 +92,7 @@ CString* ExpressionAsCStringFieldName(Expression *expr);
 bool ExpressionAppliesTo(Expression *expr, Schema *sch);
 
 /**
- * 将表达式转换为字符串表示。
+ * @brief 将表达式转换为字符串表示。
  *
  * @param expr 指向 Expression 实例的指针。
  * @return 返回表达式的字符串表示。
@@ -100,7 +100,15 @@ bool ExpressionAppliesTo(Expression *expr, Schema *sch);
 char* ExpressionToString(Expression *expr);
 
 /**
- * 释放表达式资源。
+ * @brief 从表达式中提取表名。
+ *
+ * @param expr 指向 Expression 实例的指针。
+ * @return 如果表达式是字段引用且包含表名，返回表名的 CString*；否则返回 NULL。
+ */
+CString* ExpressionGetTableName(Expression *expr);
+
+/**
+ * @brief 释放表达式资源。
  *
  * @param expr 指向要释放的 Expression 实例。
  */

@@ -43,8 +43,8 @@ typedef void (*ListPrintFunc)(void *data);
 /** 
  * @brief 链表节点 
  */ 
-typedef struct ListNode { 
-    ListValue value; 
+typedef struct ListNode {
+    ListValue value;
     struct ListNode *next; 
 } ListNode; 
 
