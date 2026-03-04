@@ -1,55 +1,52 @@
-# 编译产物和构建目录
-cmake-build-debug/
+# ==========================================
+# 1. 编译产物和构建目录 (重点清理)
+# ==========================================
+# 忽略所有 cmake 生成的构建目录
+cmake-build-*/
 build/
+out/
+bin/
+
+# 忽略具体的目标文件
 *.exe
 *.obj
 *.o
-*.log
-*.ilk
-*.pdb
-*.idb
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
 
-# CMake生成的文件
+# ==========================================
+# 2. 外部库例外规则 (最关键)
+# ==========================================
+# 先允许 Git 进入 external 目录（防止被上面的 bin/ 或 *.dll 误杀）
+!external/
+# 允许 external 目录下的二进制文件被提交
+!external/**/*.dll
+!external/**/*.so
+!external/**/*.dylib
+!external/**/bin/
+
+# ==========================================
+# 3. IDE 与 环境文件
+# ==========================================
+.idea/
+.vscode/
+*.iml
+*.user
+*.suo
 CMakeCache.txt
+CMakeFiles/
 cmake_install.cmake
 Makefile
 build.ninja
 rules.ninja
-*.ninja_log
-*.ninja_deps
 
-# CLion IDE相关
-.idea/
-*.iml
-cmake-build-debug/.idea/
-
-# 临时文件
+# ==========================================
+# 4. 临时与日志
+# ==========================================
+*.log
 *.swp
 *.tmp
 *.bak
-*.old
-
-# 编辑器生成的文件
-.vscode/
-*.user
-*.suo
-
-# 日志文件
-*.log
-
-# 其他可能生成的二进制文件（但保留 external 下的第三方库）
-*.dll
-*.so
-*.dylib
-!external/**/*.dll    # 不忽略 external 目录及其子目录下的 DLL
-!external/**/*.so     # 不忽略 external 目录及其子目录下的 SO
-!external/**/*.dylib  # 不忽略 external 目录及其子目录下的 DYLIB
-
-# 忽略测试输出目录和构建生成的 bin（但保留 external 下的 bin）
-bin/                  # 忽略根目录及其他地方的 bin
-!external/**/bin/     # 不忽略 external 目录下的 bin
-cmake-build-debug/Testing/Temporary/
-build/
-cmake-build-debug*
-*.o
-cmake-build-debug*
