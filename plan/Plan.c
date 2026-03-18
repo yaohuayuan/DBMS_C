@@ -102,3 +102,32 @@ bool PlanContainsTable(Plan *plan, CString *tableName) {
             return false;
     }
 }
+Schema* PlanSchema(Plan *plan) {
+    switch (plan->code) {
+
+        case PLAN_TABLE_CODE:
+            return TablePlanSchema(plan);
+
+        case PLAN_SELECT_CODE:
+            // 👉 Select 不改变 schema，直接往下传
+            return PlanSchema(plan->planUnion.selectPlan->p);
+
+        case PLAN_PROJECT_CODE:
+            return ProjectPlanSchema(plan->planUnion.projectPlan);
+
+        case PLAN_PRODUCT_CODE:
+            // 👉 join：需要合并两个 schema
+        {
+            Schema *s1 = PlanSchema(plan->planUnion.productPlan->p1);
+            Schema *s2 = PlanSchema(plan->planUnion.productPlan->p2);
+
+            Schema *result = SchemaInit();
+            SchemaAddAll(result, s1);
+            SchemaAddAll(result, s2);
+            return result;
+        }
+
+        default:
+            return NULL;
+    }
+}

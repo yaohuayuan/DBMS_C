@@ -1,5 +1,7 @@
 #include "Schema.h"
 
+#include "List.h"
+
 // 初始化FileInfo
 FileInfo *FileInfoInit(int type, int length) {
     FileInfo *fileInfo = malloc(sizeof(FileInfo));
@@ -118,7 +120,9 @@ void SchemaAdd(Schema *SchemaTo, CString *FldName, Schema *SchemaFrom){
 void SchemaAddAll(Schema *SchemaTo, Schema *SchemaFrom){
     FieldNode* fieldNode = SchemaFrom->fields;
     while(fieldNode!=NULL){
-        SchemaAdd(SchemaTo, fieldNode->fileName, SchemaFrom);
+        if (!SchemaHasField(SchemaTo, fieldNode->fileName)) {
+            SchemaAdd(SchemaTo, fieldNode->fileName, SchemaFrom);
+        }
         fieldNode = fieldNode->next;
     }
 }
@@ -130,4 +134,15 @@ bool SchemaHasField(Schema *schema, CString *FldName){
         fieldNode = fieldNode->next;
     }
     return false;
+}
+List* SchemaGetAllFields(Schema *schema) {
+    List *l = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+
+    FieldNode *node = schema->fields;
+    while (node) {
+        ListAppend(l, CStringCreateFromCStr(CStringGetPtr(node->fileName)));
+        node = node->next;
+    }
+
+    return l;
 }

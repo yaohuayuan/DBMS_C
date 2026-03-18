@@ -6,15 +6,24 @@
 
 
 
-ProjectPlan *ProjectPlanInit(Plan*plan,List*fieldlist){
+ProjectPlan *ProjectPlanInit(Plan* plan, List* fieldlist) {
     ProjectPlan *projectPlan = malloc(sizeof(ProjectPlan));
     projectPlan->p = plan;
     projectPlan->schema = SchemaInit();
+
+    // ⭐ 先拿一次子计划的 Schema，避免在循环里递归调用
+    Schema *inputSchema = plan->schema(plan);
+
     ListNode *head = fieldlist->head;
-    while(head){
+    while(head) {
         CString *fldname = head->value.stringData;
-        SchemaAdd(projectPlan->schema,fldname,projectPlan->p->schema(projectPlan->p));
-        head=head->next;
+
+        // ⭐ 增加去重判断：如果 ProjectPlan 的 Schema 里已经有了这个字段，就不加了
+        if (!SchemaHasField(projectPlan->schema, fldname)) {
+            SchemaAdd(projectPlan->schema, fldname, inputSchema);
+        }
+
+        head = head->next;
     }
     return projectPlan;
 }

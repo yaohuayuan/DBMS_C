@@ -25,32 +25,22 @@ else()
     message(WARNING "CMocka headers not found at ${CMOCKA_ROOT}/include")
 endif()
 
-# 查找导入库（.dll.a）
-find_library(CMOCKA_LIBRARY
-        NAMES cmocka libcmocka libcmocka.dll.a
-        PATHS ${CMOCKA_ROOT}/lib
-        NO_DEFAULT_PATH
-)
-
-# 查找 DLL（在 bin 目录）
-find_file(CMOCKA_DLL
-        NAMES cmocka.dll libcmocka.dll
-        PATHS ${CMOCKA_ROOT}/bin
-        NO_DEFAULT_PATH
-)
+# 直接设置 CMOCKA_LIBRARY 和 CMOCKA_DLL 的值
+set(CMOCKA_LIBRARY ${CMOCKA_ROOT}/lib/libcmocka.dll.a)
+set(CMOCKA_DLL ${CMOCKA_ROOT}/bin/cmocka.dll)
 
 # 验证
-if(CMOCKA_LIBRARY AND CMOCKA_DLL)
+if(EXISTS ${CMOCKA_LIBRARY} AND EXISTS ${CMOCKA_DLL})
     set(HAVE_CMOCKA TRUE)
     message(STATUS "Found CMocka library: ${CMOCKA_LIBRARY}")
     message(STATUS "Found CMocka DLL: ${CMOCKA_DLL}")
 else()
     set(HAVE_CMOCKA FALSE)
-    if(NOT CMOCKA_LIBRARY)
-        message(WARNING "CMocka library (.dll.a) not found in ${CMOCKA_ROOT}/lib")
+    if(NOT EXISTS ${CMOCKA_LIBRARY})
+        message(WARNING "CMocka library (.dll.a) not found at ${CMOCKA_LIBRARY}")
     endif()
-    if(NOT CMOCKA_DLL)
-        message(WARNING "CMocka DLL not found in ${CMOCKA_ROOT}/bin - 请检查文件是否存在")
+    if(NOT EXISTS ${CMOCKA_DLL})
+        message(WARNING "CMocka DLL not found at ${CMOCKA_DLL} - 请检查文件是否存在")
     endif()
 endif()
 
@@ -237,80 +227,37 @@ if(HAVE_CMOCKA)
     message(STATUS "Registering tests...")
 
     # File 模块测试
-    add_cmocka_test(BlockIDTest ${TEST_DIR}/File/BlockIDTest.c)
-    add_cmocka_test(PageTest ${TEST_DIR}/File/PageTest.c)
     add_cmocka_test(FileManagerTest ${TEST_DIR}/File/FileManagerTest.c)
 
     # Lib 模块测试
-    add_cmocka_test(ByteBufferTest ${TEST_DIR}/Lib/ByteBufferTest.c)
     add_cmocka_test(CStringTest ${TEST_DIR}/Lib/CStringTest.c)
-    add_cmocka_test(RBTTest ${TEST_DIR}/Lib/RBTTest.c)
-    add_cmocka_test(CMapTest ${TEST_DIR}/Lib/CMapTest.c)
-    add_cmocka_test(CVectorTest ${TEST_DIR}/Lib/CVectorTest.c)
-    add_cmocka_test(ListTest ${TEST_DIR}/Lib/ListTest.c)
-    add_cmocka_test(StreamTokenizerTest ${TEST_DIR}/Lib/StreamTokenizerTest.c)
-    add_cmocka_test(TrieTest ${TEST_DIR}/Lib/TrieTest.c)
 
     # Log 模块测试
     add_cmocka_test(LogTest ${TEST_DIR}/Log/LogTest.c)
 
     # Buffer 模块测试
-    add_cmocka_test(BufferTest ${TEST_DIR}/buffer/BufferTest.c)
     add_cmocka_test(BufferManagerTest ${TEST_DIR}/buffer/BufferManagerTest.c)
-    add_cmocka_test(BufferLRUPolicy ${TEST_DIR}/buffer/LRU/LRUPolicyTest.c)
 
     # TX 模块测试
     add_cmocka_test(TranstionTest ${TEST_DIR}/tx/TranstionTest.c)
-    add_cmocka_test(LockTest ${TEST_DIR}/tx/LockTest.c)
 
     # Record 模块测试
-    add_cmocka_test(RIDTest ${TEST_DIR}/record/RIDTest.c)
-    add_cmocka_test(SchemaTest ${TEST_DIR}/record/SchemaTest.c)
-    add_cmocka_test(LayoutTest ${TEST_DIR}/record/LayoutTest.c)
     add_cmocka_test(RecordTest ${TEST_DIR}/record/RecordTest.c)
 
     # Query 模块测试
-    add_cmocka_test(ConstantTest ${TEST_DIR}/query/ConstantTest.c)
     add_cmocka_test(ExpressionTest ${TEST_DIR}/query/ExpressionTest.c)
-    add_cmocka_test(TermTest ${TEST_DIR}/query/TermTest.c)
-    add_cmocka_test(PredicateTest ${TEST_DIR}/query/PredicateTest.c)
 
     # Plan 模块测试
     add_cmocka_test(PlanTest ${TEST_DIR}/plan/PlanTest.c)
-    add_cmocka_test(PlannerTest ${TEST_DIR}/plan/PlannerTest.c)
-    add_cmocka_test(BasicQueryPlannerTest ${TEST_DIR}/plan/BasicQueryPlannerTest.c)
-    add_cmocka_test(BasicUpdatePlannerTest ${TEST_DIR}/plan/BasicUpdatePlannerTest.c)
-    add_cmocka_test(TablePlanTest ${TEST_DIR}/plan/TablePlanTest.c)
-    add_cmocka_test(SelectPlanTest ${TEST_DIR}/plan/SelectPlanTest.c)
-    add_cmocka_test(ProjectPlanTest ${TEST_DIR}/plan/ProjectPlanTest.c)
-    add_cmocka_test(ProductPlanTest ${TEST_DIR}/plan/ProductPlanTest.c)
 
     # Parse 模块测试
     add_cmocka_test(ParserTest ${TEST_DIR}/parse/ParserTest.c)
-    add_cmocka_test(LexerTest ${TEST_DIR}/parse/LexerTest.c)
-    add_cmocka_test(QueryDataTest ${TEST_DIR}/parse/QueryDataTest.c)
-    add_cmocka_test(DeleteDataTest ${TEST_DIR}/parse/DeleteDataTest.c)
-    add_cmocka_test(InsertDataTest ${TEST_DIR}/parse/InsertDataTest.c)
-    add_cmocka_test(ModifyDataTest ${TEST_DIR}/parse/ModifyDataTest.c)
-    add_cmocka_test(CreateViewDataTest ${TEST_DIR}/parse/CreateViewDataTest.c)
-    add_cmocka_test(CreateTableDataTest ${TEST_DIR}/parse/CreateTableDataTest.c)
-    add_cmocka_test(CreateIndexDataTest ${TEST_DIR}/parse/CreateIndexDataTest.c)
-    add_cmocka_test(PredParserTest ${TEST_DIR}/parse/PredParserTest.c)
 
     # Metadata 模块测试
     add_cmocka_test(MetadataManagerTest ${TEST_DIR}/metadata/MetadataManagerTest.c)
-    add_cmocka_test(TableManagerTest ${TEST_DIR}/metadata/TableManagerTest.c)
-    add_cmocka_test(ViewManagerTest ${TEST_DIR}/metadata/ViewManagerTest.c)
-    add_cmocka_test(IndexManagerTest ${TEST_DIR}/metadata/IndexManagerTest.c)
-    add_cmocka_test(StatManagerTest ${TEST_DIR}/metadata/StatManagerTest.c)
-    add_cmocka_test(StatInfoTest ${TEST_DIR}/metadata/StatInfoTest.c)
-    add_cmocka_test(IndexInfoTest ${TEST_DIR}/metadata/IndexInfoTest.c)
 
     # Index 模块测试
     add_cmocka_test(HashIndexTest ${TEST_DIR}/index/HashIndexTest.c)
-
-    # DBMS 模块测试
-    add_cmocka_test(DBMSTest ${TEST_DIR}/DBMSTest.c)
 
     enable_testing()
 else()

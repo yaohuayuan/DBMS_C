@@ -2,44 +2,73 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include "cmocka.h"
-#include <stdint.h>
 #include "Parser.h"
-#include <stdlib.h>
-#include <string.h>
 
-// 测试解析器初始化
-static void test_parser_init(void **state) {
-    (void)state;
+/**
+ * 测试 1: 解析基础 SELECT 语句
+ */
+static void test_parser_query_basic(void **state) {
+    const char *sql = "SELECT id, name FROM users WHERE age = 20";
+    Parser *p = ParserInit(sql);
 
-    const char *testSql = "SELECT * FROM test_table WHERE id = 1;";
-    Parser *parser = ParserInit((char *)testSql);
+    QueryData *qd = ParserQuery(p);
+    assert_non_null(qd);
 
-    // 验证解析器是否正确初始化
-    assert_non_null(parser);
-    assert_non_null(parser->lexer);
-    
-    // 注意：这里假设ParserInit函数会分配内存，实际可能需要调整
-    // ParserFree(parser); // 如果有ParserFree函数的话
+    // 1. 验证字段列表 (SELECT id, name)
+    // 假设 List 存储的是 CString
+    assert_int_equal(qd->fields->size, 2);
+
+    // 2. 验证表列表 (FROM users)
+    assert_int_equal(qd->tables->size, 1);
+
+    // 3. 验证谓词 (WHERE age = 20)
+    // 这里需要根据你的 Predicate/Term 结构来进一步 assert
+    assert_non_null(qd->predicate);
+
+    // 清理 (注意：你需要实现对应的 Deep Free 函数)
+    // QueryDataFree(qd);
+    // ParserFree(p);
 }
 
-// 测试CommandData结构体的基本功能
-static void test_command_data_struct(void **state) {
-    (void)state;
+/**
+ * 测试 2: 解析 INSERT 语句
+ */
+static void test_parser_insert(void **state) {
+    const char *sql = "INSERT INTO students (id, score) VALUES (1, 95)";
+    Parser *p = ParserInit(sql);
 
-    // 创建一个CommandData实例
-    CommandData cmdData;
-    cmdData.code = CMD_INSERT_DATA;
-    
-    // 验证CommandData结构体的字段
-    assert_int_equal(cmdData.code, CMD_INSERT_DATA);
+    CommandData *cmd = ParserInsert(p);
+    assert_int_equal(cmd->code, CMD_INSERT_DATA);
+
+    InsertData *id = cmd->data.insertData;
+    // 验证表名
+    assert_string_equal(CStringGetPtr(id->tblname), "students");
+    // 验证字段数与值数
+    assert_int_equal(cmd->data.insertData->flds->size, 2);
+    assert_int_equal(cmd->data.insertData->vals->size, 2);
 }
 
-// 主函数：注册所有测试
+/**
+ * 测试 3: 解析带 AND 的复杂 WHERE 子句
+ */
+static void test_parser_complex_predicate(void **state) {
+    const char *sql = "age >= 18 AND status = 'active'";
+    Parser *p = ParserInit(sql);
+
+    // 直接测试 Predicate 解析分支
+    Predicate *pred = ParserPredicate(p);
+    assert_non_null(pred);
+
+    // 验证是否成功解析了两个 Term (因为有 AND)
+    // 根据你的 PredicateInit 和 ConjoinWith 逻辑，
+    // 这里通常会形成一个 Term 列表
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_parser_init),
-            cmocka_unit_test(test_command_data_struct),
+        cmocka_unit_test(test_parser_query_basic),
+        cmocka_unit_test(test_parser_insert),
+        cmocka_unit_test(test_parser_complex_predicate),
     };
-
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -52,31 +52,43 @@ void SelectDataDisplay(Plan *plan,Scan*scan){
 int main() {
     TransactionManager *transactionManager = TransactionManagerInit();
     // 初始化数据库
-    SimpleDB *DBMS = SimpleDBInit("Show", SIMPLE_DB_INIT_VAL, SIMPLE_DB_INIT_VAL);
+    SimpleDB *DBMS = SimpleDBInit("Show1", SIMPLE_DB_INIT_VAL, SIMPLE_DB_INIT_VAL);
     Transaction *transaction = SimpleDataNewTX(DBMS);
     Planner *planner = DBMS->planer;
 
     printf("Database has started successfully. Type 'exit' to close the database.\n");
 
-    char cmd[512];  // 用于存储用户输入的命令
-
+    char sql[4096] = {0};
+    char line[512];
     while (1) {
-        printf("SQL>");
-        if (scanf(" %[^\n]", cmd) == EOF) {  // 读取一整行，支持带空格的 SQL 语句
-            break;
-        }
+        printf("SQL> ");
 
-        if (strcmp(cmd, "exit") == 0) {
+        sql[0] = '\0';  // 清空SQL
+
+        while (1) {
+            if (!fgets(line, sizeof(line), stdin)) {
+                return 0;
+            }
+            strcat(sql, line);
+            if (strchr(line, ';')) {
+                break;
+            }
+            printf("   -> ");  // 多行提示（像MySQL一样）
+        }
+        char *semicolon = strchr(sql, ';');
+        if (semicolon) *semicolon = '\0';
+
+        if (strcmp(sql, "exit") == 0) {
             printf("Exiting the database...\n");
             break;
         }
 
         // 处理命令
-        if (strncmp(cmd, "SELECT", 6) == 0 || strncmp(cmd, "select", 6) == 0) {
+        if (strncmp(sql, "SELECT", 6) == 0 || strncmp(sql, "select", 6) == 0) {
             // SELECT 查询语句
-            CString *cCmd = CStringCreateFromCStr(cmd);
-            Plan *plan = PlannerCreateQueryPlan(planner, cCmd, transaction);
-            CStringDestroy(cCmd);
+            CString *csql = CStringCreateFromCStr(sql);
+            Plan *plan = PlannerCreateQueryPlan(planner, csql, transaction);
+            CStringDestroy(csql);
             Scan *scan = plan->open(plan);
 
             // 遍历查询结果
@@ -84,29 +96,29 @@ int main() {
             SelectDataDisplay(plan,scan);
 
             scan->close(scan);
-        }else if (strncmp(cmd, "COMMIT", 6) == 0 || strncmp(cmd, "COMMIT", 6) == 0){
+        }else if (strncmp(sql, "COMMIT", 6) == 0 || strncmp(sql, "COMMIT", 6) == 0){
             TransactionCommit(transaction);
             transaction = SimpleDataNewTX(DBMS);
             TransactionManagerAdd(transactionManager,transaction);
-        }else if(strncmp(cmd, "ROLLBACK", 8) == 0 || strncmp(cmd, "rollback", 8) == 0){
+        }else if(strncmp(sql, "ROLLBACK", 8) == 0 || strncmp(sql, "rollback", 8) == 0){
             TransactionRollback(transaction);
             transaction = SimpleDataNewTX(DBMS);
             TransactionManagerAdd(transactionManager,transaction);
-        }else if(strncmp(cmd, "START_NEW_TRANSACTION", 21) == 0){
+        }else if(strncmp(sql, "START_NEW_TRANSACTION", 21) == 0){
             transaction = SimpleDataNewTX(DBMS);
             TransactionManagerAdd(transactionManager,transaction);
-        }else if (strncmp(cmd, "SWITCH", 6) == 0 || strncmp(cmd, "switch", 6) == 0) {
+        }else if (strncmp(sql, "SWITCH", 6) == 0 || strncmp(sql, "switch", 6) == 0) {
             char txnId[128];
-            sscanf(cmd + 7, "%s", txnId);  // 获取事务 ID
+            sscanf(sql + 7, "%s", txnId);  // 获取事务 ID
             TransactionManagerSwitch(transactionManager, txnId);
         }
             // 处理显示所有事务命令
-        else if (strncmp(cmd, "DISPLAY", 7) == 0 || strncmp(cmd, "display", 7) == 0) {
+        else if (strncmp(sql, "DISPLAY", 7) == 0 || strncmp(sql, "display", 7) == 0) {
             TransactionManagerDisplay(transactionManager);
-        }else if (strncmp(cmd, "BENCH", 5) == 0 || strncmp(cmd, "bench", 5) == 0) {
+        }else if (strncmp(sql, "BENCH", 5) == 0 || strncmp(sql, "bench", 5) == 0) {
             char operation[32];
             int times = 0;
-            sscanf(cmd + 6, "%s %d", operation, &times);
+            sscanf(sql + 6, "%s %d", operation, &times);
             Transaction *tx = SimpleDataNewTX(DBMS);
             clock_t start = clock();
             for (int i = 0; i < times; ++i) {
@@ -130,9 +142,9 @@ int main() {
         }
 
         else {
-            CString *cCmd = CStringCreateFromCStr(cmd);
-            int result = PlannerExecuteUpdate(planner, cCmd, transaction);
-            CStringDestroy(cCmd);
+            CString *csql = CStringCreateFromCStr(sql);
+            int result = PlannerExecuteUpdate(planner, csql, transaction);
+            CStringDestroy(csql);
             printf("Command executed. Rows affected: %d\n", result);
         }
     }
@@ -142,3 +154,4 @@ int main() {
     printf("Database closed.\n");
     return 0;
 }
+

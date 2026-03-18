@@ -9,12 +9,23 @@
 #include "Expression.h"
 typedef struct Expression Expression;
 typedef struct Plan Plan;
+typedef enum {
+    OP_EQ,
+    OP_NE,
+    OP_LT,
+    OP_GT,
+    OP_LE,
+    OP_GE,
+    OP_UNKNOWN,
+} CompareOp;
+
 /**
  * @brief Term 结构体，用于表示查询条件中的一个术语，由左右两个表达式组成。
  */
 typedef struct Term{
     Expression *lhs; ///< 左操作数表达式
     Expression *rhs; ///< 右操作数表达式
+    CompareOp op;
 }Term;
 
 /**
@@ -24,7 +35,7 @@ typedef struct Term{
  * @param rhs 右操作数表达式。
  * @return 返回初始化后的 Term 指针。
  */
-Term *TermInit(Expression*lhs,Expression*rhs);
+Term *TermInit(Expression*lhs,Expression*rhs,CompareOp op);
 
 /**
  * @brief 检查术语是否被当前扫描记录满足。

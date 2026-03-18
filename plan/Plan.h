@@ -69,4 +69,5 @@ Plan *PlanInit(void *data,PLAN_CODE code);
  * @return 如果计划包含指定的表，返回 true；否则返回 false。
  */
 bool PlanContainsTable(Plan *plan, CString *tableName);
+Schema* PlanSchema(Plan *plan);
 #endif //DBMS_C_PLAN_H

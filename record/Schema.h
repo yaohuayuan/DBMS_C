@@ -8,6 +8,8 @@
 #include "CString.h"
 #include "map.h"
 #include <stdbool.h>
+
+#include "List.h"
 /**
  * @brief FileInfoCode 枚举，定义了各种文件信息类型。
  */
@@ -157,4 +159,5 @@ void SchemaAddAll(Schema *SchemaTo, Schema *SchemaFrom);
  * @return 如果包含该字段，返回 true；否则返回 false。
  */
 bool SchemaHasField(Schema *schema, CString *FldName);
+List* SchemaGetAllFields(Schema *schema) ;
 #endif //DBMS_C_SCHEMA_H

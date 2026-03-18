@@ -10,7 +10,7 @@ Parser *ParserInit(const char *s){
     parser->lexer = LexerInit(s);
 
 //    printf("test");
-    StreamTokenizerNext(parser->lexer->tokenizer);
+
 //    printf("test");
     return parser;
 }
@@ -37,9 +37,10 @@ Expression *ParserExpression(Parser*parser){
 }
 Term *ParserTerm(Parser*parser){
     Expression *lhs = ParserExpression(parser);
-    LexerEatDelim(parser->lexer,'=');
+    const CompareOp op = LexerGetCurrentOp(parser->lexer);
+    LexerNextToken(parser->lexer);
     Expression *rhs = ParserExpression(parser);
-    return TermInit(lhs,rhs);
+    return TermInit(lhs,rhs,op);
 }
 Predicate *ParserPredicate(Parser*parser){
     Predicate * predicate = PredicateInit(ParserTerm(parser));
@@ -53,7 +54,15 @@ Predicate *ParserPredicate(Parser*parser){
 
 List* ParserSelectList(Parser*parser){
     List* l = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+
+    if (LexerMatchDelim(parser->lexer, '*')) {
+        LexerEatDelim(parser->lexer, '*');
+        ListAppend(l, CStringCreateFromCStr("*"));
+        return l;
+    }
+
     ListAppend(l, ParserField(parser));
+
     if(LexerMatchDelim(parser->lexer,',')){
         LexerEatDelim(parser->lexer,',');
         ListAddAll(l, ParserSelectList(parser));
@@ -124,9 +133,11 @@ CommandData* ParserInsert(Parser*parser){
     LexerEatKeyWord(parser->lexer,"values");
     LexerEatDelim(parser->lexer,'(');
     List *vals = ParserConstantList(parser);
+    LexerEatDelim(parser->lexer,')');
     CommandData * commandData = malloc(sizeof(CommandData));
     commandData->code = CMD_INSERT_DATA;
     commandData->data.insertData = InsertDataInit(tblname,fld,vals);
+
     return commandData;
 }
 CommandData* ParserModify(Parser*parser){

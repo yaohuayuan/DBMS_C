@@ -7,16 +7,26 @@
 #include "math.h"
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
-Term *TermInit(Expression*lhs,Expression*rhs){
+Term *TermInit(Expression*lhs,Expression*rhs,CompareOp op){
     Term *term = malloc(sizeof (Term));
     term->lhs = lhs;
     term->rhs = rhs;
+    term->op = op;
     return term;
 }
 bool TermIsSatisfied(Term *term,Scan *s){
     Constant *lhsval = ExpressionEvaluate(term->lhs,s);
     Constant *rhsval = ExpressionEvaluate(term->rhs,s);
-    return ConstantEquals(rhsval,lhsval);
+    int cmp = ConstantCompareTo(lhsval,rhsval);
+    switch (term->op) {
+        case OP_EQ: return cmp == 0;
+        case OP_NE: return cmp != 0;
+        case OP_LT: return cmp < 0;
+        case OP_LE: return cmp <= 0;
+        case OP_GT: return cmp > 0;
+        case OP_GE: return cmp >= 0;
+        default: return false;
+    }
 }
 int TermReductionFactor(Term*term,Plan*plan){
     CString *lhsName,*rhsName;

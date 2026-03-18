@@ -39,7 +39,20 @@ Plan *BasicQueryPlannerCreatPlan(BasicQueryPlanner*basicQueryPlanner,QueryData*q
     }
     SelectPlan*selectPlan = SelectPlanInit(p,queryData->predicate);
     p = PlanInit(selectPlan,PLAN_SELECT_CODE);
+    // ⭐ SELECT * 展开
+    if (queryData->fields->size == 1) {
+        CString *fld = queryData->fields->head->value.stringData;
 
+        if (strcmp(CStringGetPtr(fld), "*") == 0) {
+
+            Schema *schema = PlanSchema(p);
+
+            // 🔥 用 Schema 的字段替换 *
+            List *realFields = SchemaGetAllFields(schema);
+
+            queryData->fields = realFields;
+        }
+    }
     ProjectPlan*projectPlan = ProjectPlanInit(p,queryData->fields);
     p = PlanInit(projectPlan,PLAN_PROJECT_CODE);
     return p;
