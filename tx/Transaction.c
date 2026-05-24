@@ -4,6 +4,7 @@
 
 #include "Transaction.h"
 #include "recovery/RecoveryManager.h"
+#include "../trace/DBTrace.h"
 int static nextTxNum=0;
 int TransactionNextTxNumber(Transaction *transaction) {
     nextTxNum++;
@@ -21,6 +22,7 @@ Transaction* TransactionInit(FileManager*fileManager, LogManager*logManager, Buf
     return transaction;
 }
 void TransactionCommit(Transaction*transaction){
+    TransactionTraceCommit(transaction);
     RecoveryCommit(transaction->recoveryManager);
     printf("transaction %d commit\n",transaction->txNum);
     ConCurrencyManagerRelease(transaction->conCurrencyManager);
@@ -29,6 +31,7 @@ void TransactionCommit(Transaction*transaction){
 
 }
 void TransactionRollback(Transaction*transaction){
+    TransactionTraceRollback(transaction);
     RecoveryRollback(transaction->recoveryManager);
     printf("transaction %d rollback\n",transaction->txNum);
     ConCurrencyManagerRelease(transaction->conCurrencyManager);

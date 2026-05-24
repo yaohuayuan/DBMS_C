@@ -4,6 +4,7 @@
 
 #include "Planner.h"
 #include "Parser.h"
+#include "../trace/DBTrace.h"
 Planner *PlannerInit(BasicQueryPlanner*queryPlanner,BasicUpdatePlanner *updatePlanner){
     Planner *planner = malloc(sizeof(Planner));
     planner->updatePlanner = updatePlanner;
@@ -13,11 +14,13 @@ Planner *PlannerInit(BasicQueryPlanner*queryPlanner,BasicUpdatePlanner *updatePl
 Plan* PlannerCreateQueryPlan(Planner*planner,CString*qry,Transaction*transaction){
     Parser *parser = ParserInit(CStringGetPtr(qry));
     QueryData*data = ParserQuery(parser);
+    QueryDataTrace(data);
     return BasicQueryPlannerCreatPlan(planner->queryPlanner,data,transaction);
 }
 int PlannerExecuteUpdate(Planner*planner,CString *cmd,Transaction*transaction){
     Parser*parser = ParserInit(CStringGetPtr(cmd));
     CommandData *commandData =   ParserUpdateCmd(parser);
+    CommandDataTrace(commandData);
     CommandCode commandCode = commandData->code;
     if(commandCode==CMD_INSERT_DATA){
         return BasicUpdatePlannerExecuteInsert(planner->updatePlanner,commandData->data.insertData,transaction);
