@@ -282,6 +282,7 @@ if(HAVE_CMOCKA)
 
     # Parse 模块测试
     add_cmocka_test(ParserTest ${TEST_DIR}/parse/ParserTest.c)
+    add_cmocka_test(ParseBasicTest ${TEST_DIR}/parse/ParseBasicTest.c)
 
     # Metadata 模块测试
     add_cmocka_test(MetadataManagerTest ${TEST_DIR}/metadata/MetadataManagerTest.c)
