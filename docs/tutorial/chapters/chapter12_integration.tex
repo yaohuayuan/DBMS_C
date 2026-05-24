@@ -1,17 +1,224 @@
-\chapter{综合实验}
+\chapter{综合实验与总结}
 \label{chap:integration}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
 
-\section{相关源码文件}
-TODO
+本章是整本实验指导书的收束章节。前面的章节分别从基础组件、文件页式存储、日志、缓冲区、事务、记录、元数据、解析、查询计划、更新执行和 Trace 观察等角度展开，本章将这些模块重新串成一条完整的 DBMS 执行链路。
 
-\section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+通过本章，读者应能够从一组完整 SQL 出发，观察 DBMS\_C 如何完成建表、插入、查询、修改、删除、提交以及空结果查询，并能把这些操作对应回前面各章介绍过的源码模块和测试用例。本章不新增自动测试，也不要求扩展系统功能，而是帮助读者形成整体视角。
 
-\section{实验内容}
-TODO
+\section{综合实验主线}
 
-\section{思考题}
-TODO
+综合实验建议使用一组短小但覆盖面较完整的 SQL。它既包含更新类命令，也包含 SELECT 查询和最终提交，可以作为人工运行、Trace 观察和复盘源码调用链的统一样例。
+
+\begin{dbcode}[listing options={language=SQL}]{综合实验 SQL}
+CREATE TABLE final_student(id INT, name VARCHAR(20));
+INSERT INTO final_student(id, name) VALUES(1, 'wang');
+INSERT INTO final_student(id, name) VALUES(2, 'li');
+SELECT id, name FROM final_student WHERE id = 1;
+UPDATE final_student SET name = 'newwang' WHERE id = 1;
+SELECT id, name FROM final_student WHERE id = 1;
+DELETE FROM final_student WHERE id = 2;
+SELECT id, name FROM final_student WHERE id = 2;
+commit;
+\end{dbcode}
+
+这组 SQL 覆盖了建表、插入、查询、修改、删除、提交和空结果查询。建议实际演示时使用新的表名，例如 \codepath{final_student_001}、\codepath{final_student_002}，避免与已经存在的数据库目录或旧表名发生混淆。
+
+\section{完整执行链路说明}
+
+图 \ref{fig:integration-chain} 用一个压缩视角展示了 DBMS\_C 的综合执行链路。图中上半部分是 SQL 进入系统后的解析、计划和命令分发，下半部分是记录、事务、缓冲区和文件页式存储等支撑层。Trace 不参与数据修改，而是在旁路观察这些阶段。
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[node distance=8mm and 9mm]
+    \node[dblevel] (sql) {SQL 输入};
+    \node[dbnode, below=of sql] (parse) {第8章 Parse\\QueryData / CommandData};
+    \node[dbnode, below left=of parse, xshift=-8mm] (query) {第9章 Plan / Scan\\SELECT 查询};
+    \node[dbnode, below right=of parse, xshift=8mm] (update) {第10章 Update\\更新命令分发};
+    \node[dbnode, below=18mm of parse] (metadata) {第7章 Metadata\\系统目录};
+    \node[dbnode, below=of metadata] (record) {第6章 Record\\记录布局与扫描};
+    \node[dbnode, below left=of record, xshift=-8mm] (tx) {第5章 Transaction\\提交、回滚、并发基础};
+    \node[dbnode, below right=of record, xshift=8mm] (buffer) {第4章 Buffer\\pin / dirty / flush};
+    \node[dbnode, below=18mm of record] (file) {第2章 File / Page\\文件块与页};
+    \node[dbnode, left=of file, xshift=-8mm] (log) {第3章 Log\\日志追加与刷盘};
+    \node[dbnode, right=of file, xshift=8mm] (lib) {第1章 Lib\\基础工具};
+    \node[dbnode, right=of update, xshift=10mm] (trace) {第11章 Trace\\CLI 过程观察};
+
+    \draw[dbarrow] (sql) -- (parse);
+    \draw[dbarrow] (parse) -- (query);
+    \draw[dbarrow] (parse) -- (update);
+    \draw[dbarrow] (query) -- (metadata);
+    \draw[dbarrow] (update) -- (metadata);
+    \draw[dbarrow] (metadata) -- (record);
+    \draw[dbarrow] (record) -- (tx);
+    \draw[dbarrow] (record) -- (buffer);
+    \draw[dbarrow] (tx) -- (log);
+    \draw[dbarrow] (tx) -- (buffer);
+    \draw[dbarrow] (buffer) -- (file);
+    \draw[dbarrow] (lib) -- (file);
+    \draw[dbdashline] (trace) -- (parse);
+    \draw[dbdashline] (trace) -- (query);
+    \draw[dbdashline] (trace) -- (update);
+    \draw[dbdashline] (trace) -- (tx);
+  \end{tikzpicture}
+  \caption{DBMS\_C 综合执行链路图}
+  \label{fig:integration-chain}
+\end{figure}
+
+这条链路可以按章节反向复盘：第8章 Parse 将 SQL 字符串变成 \codepath{QueryData} 或 \codepath{CommandData}；第9章 Plan/Scan 把 SELECT 变成计划树，再打开为运行期扫描链；第10章 Update 将更新命令分发到 \codepath{BasicUpdatePlanner}；第7章 Metadata 维护表、字段、视图和索引目录；第6章 Record 负责记录布局、slot 和表扫描；第5章 Transaction 连接写入、提交、回滚和并发锁基础；第4章 Buffer 维护页框缓存；第3章 Log 提供日志追加和刷盘基础；第2章 File/Page 完成文件块读写；第1章 Lib 为这些模块提供字符串、容器和字节缓冲等基础能力；第11章 Trace 用 CLI 文本观察这些过程。
+
+表 \ref{tab:integration-command-module} 进一步把综合 SQL 与主要模块对应起来。实际执行时，一条命令通常会跨越多个模块，表格只列出最适合观察的主路径。
+
+\begin{table}[htbp]
+  \centering
+  \caption{SQL 命令与模块关系表}
+  \label{tab:integration-command-module}
+  \begin{tabularx}{\textwidth}{p{30mm}Y Y}
+    \toprule
+    SQL 类型 & 主要经过模块 & 观察重点 \\
+    \midrule
+    CREATE TABLE & Parser、Update、Metadata、Record & 命令解析、表结构登记、系统目录写入 \\
+    INSERT & Parser、Update、Record、Transaction、Buffer & 记录插入、写入事务层、页框标脏 \\
+    SELECT & Parser、Plan、Scan、Record、Metadata & QueryData、计划树、扫描链和输出行数 \\
+    UPDATE & Parser、Update、Scan、Record、Transaction & 定位匹配记录并修改字段值 \\
+    DELETE & Parser、Update、Scan、Record、Transaction & 定位匹配记录并删除 slot \\
+    commit & Transaction、Log、Buffer & 提交事务、刷写日志和修改页 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{综合运行建议}
+
+综合实验可以按两种方式观察。第一种是普通模式，重点观察 SQL 的用户可见输出；第二种是 Trace 模式，重点观察 SQL 在内部模块之间的传递过程。
+
+\begin{dbcode}[listing options={language=sh}]{普通模式运行}
+bin\NewDBMS.exe
+\end{dbcode}
+
+普通模式适合确认命令是否可以正常执行、查询结果是否符合预期。Trace 默认关闭，因此普通输出不会混入 Trace 标签。
+
+\begin{dbcode}[listing options={language=sh}]{Trace 模式运行}
+bin\NewDBMS.exe --trace
+\end{dbcode}
+
+也可以在交互式命令行中输入：
+
+\begin{dbcode}[listing options={language=SQL}]{交互式开启 Trace}
+trace on;
+trace off;
+trace;
+\end{dbcode}
+
+Trace 是 CLI 文本过程可视化，不是图形界面。它适合把第8章到第10章的执行链路连接起来观察，但不改变 SQL 的执行结果。
+
+表 \ref{tab:integration-normal-trace} 对普通模式和 Trace 模式作一个综合对照。
+
+\begin{table}[htbp]
+  \centering
+  \caption{普通模式与 Trace 模式综合观察表}
+  \label{tab:integration-normal-trace}
+  \begin{tabularx}{\textwidth}{p{28mm}Y Y}
+    \toprule
+    运行方式 & 适合观察 & 注意事项 \\
+    \midrule
+    普通模式 & SQL 执行结果、查询表头和记录行 & 输出更接近用户使用场景，内部链路不可见 \\
+    Trace 模式 & Parse、Plan、Scan、Update、Transaction、Output 等阶段 & Trace 默认关闭，需要通过 \codepath{--trace} 或 \codepath{trace on;} 开启 \\
+    人工复盘 & 将输出与章节源码、图表和测试对应起来 & 建议使用新表名，避免旧数据库恢复影响演示现象 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{测试体系总览}
+
+本指导书从第1章到第10章遵循“先补真实 CTest，再写章节”的方式组织。第11章 Trace 是人工验证型实验，因此不新增自动测试。表 \ref{tab:integration-ctest-matrix} 汇总了已经作为章节依据的测试。
+
+\begin{longtable}{p{36mm}p{22mm}p{35mm}p{58mm}}
+  \caption{新增 CTest 覆盖矩阵}
+  \label{tab:integration-ctest-matrix}\\
+  \toprule
+  测试名称 & 对应章节 & 覆盖模块 & 验证重点 \\
+  \midrule
+  \endfirsthead
+  \toprule
+  测试名称 & 对应章节 & 覆盖模块 & 验证重点 \\
+  \midrule
+  \endhead
+  LibBasicTest & 第1章 & Lib & 字符串、容器、字节缓冲和词法切分基础行为 \\
+  FileManagerBasicTest & 第2章 & File/Page & Page 读写、BlockID、FileManager 块级读写 \\
+  LogManagerBasicTest & 第3章 & Log & 日志追加、刷盘和基础读取能力 \\
+  BufferManagerBasicTest & 第4章 & buffer & pin/unpin、modified/dirty 和 flush 行为 \\
+  TransactionBasicTest & 第5章 & tx & Transaction 与 BufferList、BufferManager 的基础协作 \\
+  ConcurrencyBasicTest & 第5章 & tx/concurrency & S 锁、X 锁和释放锁的基础调用 \\
+  RecoveryBasicTest & 第5章 & tx/recovery & 修改旧值记录和 rollback 基础行为 \\
+  RecordBasicTest & 第6章 & record & Schema、Layout、RID、RecordPage、TableScan 基础行为 \\
+  MetadataBasicTest & 第7章 & metadata & 表、视图、索引元数据登记与读回 \\
+  ParseBasicTest & 第8章 & parse/query & SELECT、INSERT、UPDATE、DELETE、CREATE 的解析结果 \\
+  PlanScanBasicTest & 第9章 & plan/query/record & SELECT 计划生成、Scan 打开和结果读取 \\
+  UpdateBasicTest & 第10章 & plan/metadata/record & CREATE、INSERT、UPDATE、DELETE、VIEW、INDEX 更新路径 \\
+  \bottomrule
+\end{longtable}
+
+这些测试不是为了覆盖所有边界条件，而是为实验指导书建立可运行的最小证据链。读者在扩展实验时，应继续沿用同一原则：先确认真实 API 和可运行测试，再把测试路径、观察点和源码位置写入文档。
+
+\section{模块边界总结}
+
+理解 DBMS\_C 的关键，不是把所有代码混在一起看，而是先看清各层边界。表 \ref{tab:integration-chapter-module} 给出各章节与模块职责的总览。
+
+\begin{table}[htbp]
+  \centering
+  \caption{各章节对应模块总览表}
+  \label{tab:integration-chapter-module}
+  \begin{tabularx}{\textwidth}{p{18mm}p{34mm}Y}
+    \toprule
+    章节 & 模块 & 职责边界 \\
+    \midrule
+    第1章 & Lib & 提供基础字符串、容器、字节缓冲和词法工具，不理解数据库语义 \\
+    第2章 & File/Page & 负责页与文件块读写，不理解表和记录 \\
+    第3章 & Log & 负责日志追加、刷盘和读取基础，不直接执行 SQL \\
+    第4章 & Buffer & 管理页框、pin/unpin、dirty/flush，不理解 SQL \\
+    第5章 & Transaction & 组织写入、提交、回滚和并发控制基础 \\
+    第6章 & Record & 理解记录布局、slot 和表扫描 \\
+    第7章 & Metadata & 管理表结构、字段、视图、索引等系统目录 \\
+    第8章 & Parse & 只把 SQL 文本解析为数据对象，不执行查询 \\
+    第9章 & Plan/Scan & 处理 SELECT 查询计划和运行期扫描 \\
+    第10章 & Update & 处理更新类命令的执行分发 \\
+    第11章 & Trace & 只观察执行过程，不改变执行语义 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+从模块边界看，\codepath{File/Page} 不理解“表”，\codepath{Buffer} 不理解 SQL，\codepath{Record} 开始理解记录布局，\codepath{Metadata} 负责管理表结构，\codepath{Parser} 只解析，\codepath{Plan/Scan} 只处理查询执行，\codepath{Update} 处理更新命令，\codepath{Transaction/Log/Recovery} 支撑写入链路，\codepath{Trace} 只是旁路观察。
+
+\section{常见问题与排查}
+
+综合实验中常见的问题往往不是单个模块错误，而是运行环境、数据库目录或构建目录造成的观察偏差。
+
+\begin{itemize}
+  \item 重复运行同一个表名时，可能读到旧数据或旧系统目录记录。建议人工演示时使用新的表名，或在独立工作目录运行。
+  \item Trace 默认关闭。如果看不到 \codepath{TRACE_PARSE}、\codepath{TRACE_PLAN} 等标签，先确认是否使用 \codepath{--trace} 或输入了 \codepath{trace on;}。
+  \item Windows 下构建建议使用 MinGW Makefiles，并按当前项目验证过的命令执行；不要把 Linux 风格命令直接照搬到 PowerShell。
+  \item 临时构建目录如果出现 \codepath{.tmp} 或 Access denied 等半更新现象，可以换新的 \codepath{build-check} 类目录重新验证当前目标。
+  \item 不建议手动同步 CMake 生成的 \codepath{.tmp} 文件。生成目录异常时，应先停止并报告真实状态。
+  \item 不建议把 CLI Trace 自动化测试作为必须步骤。Trace 更适合人工观察，核心解析、计划、更新路径已经由前面章节的 CTest 支撑。
+\end{itemize}
+
+\section{后续扩展方向}
+
+本指导书定位为本科课程实践和项目阅读材料，后续可以沿以下方向继续扩展：
+
+\begin{itemize}
+  \item 更系统的错误处理实验，把 DBError 与更多模块入口逐步接合。
+  \item 更稳定的测试数据库隔离机制，降低重复运行测试和人工演示时的目录残留影响。
+  \item 更完整的索引查询路径实验，进一步观察索引元数据如何进入查询计划。
+  \item 更清晰的执行计划可视化，把当前 CLI Trace 转换为结构化输出或可视化数据源。
+  \item 更统一的文档排版和图表风格，提升后续教学使用时的阅读体验。
+\end{itemize}
+
+这些方向都可以继续坚持本指导书使用的实验组织方式：先确认真实代码和测试，再撰写章节说明。
+
+\section{本章小结}
+
+本章将 DBMS\_C 的前十一章内容收束为一条综合执行链路：SQL 先被解析为数据对象，SELECT 经由 Plan/Scan 执行，更新命令经由 BasicUpdatePlanner 执行，记录和元数据向下依赖事务、缓冲区、日志和文件页式存储，Trace 则提供 CLI 形式的过程观察。
+
+作为一个教学型 C 语言 DBMS 原型，DBMS\_C 的价值在于它把数据库系统中常见的抽象压缩到可阅读、可运行、可测试的代码规模内。读者完成本指导书后，应能够从 SQL 输入一路追踪到底层文件块读写，并理解各模块之间如何协作完成一次数据库操作。
