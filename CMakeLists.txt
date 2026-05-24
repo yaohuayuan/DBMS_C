@@ -1,14 +1,22 @@
-# 最小 CMake 版本
+# 最低 CMake 版本
 cmake_minimum_required(VERSION 3.15)
 
 # 项目名称
 project(NewDBMS VERSION 1.0.0 LANGUAGES C)
 
-# 设置 C 标准
+# C 语言标准
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# 可执行文件输出路径（所有配置统一输出到 bin）
+# Avoid CMake's Windows-GNU Unix Makefiles temporary objects.a link archive.
+# In this environment those intermediate archives can be locked briefly and
+# make relinks fail even though compilation succeeds.
+if(WIN32 AND CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_C_LINK_EXECUTABLE
+            "<CMAKE_C_COMPILER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> -Wl,--out-implib,<TARGET_IMPLIB> ${CMAKE_GNULD_IMAGE_VERSION} <LINK_LIBRARIES>")
+endif()
+
+# 可执行文件输出目录，统一输出到 bin
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_SOURCE_DIR}/bin)
@@ -25,11 +33,11 @@ else()
     message(WARNING "CMocka headers not found at ${CMOCKA_ROOT}/include")
 endif()
 
-# 直接设置 CMOCKA_LIBRARY 和 CMOCKA_DLL 的值
+# 设置 CMocka 库和 DLL 路径
 set(CMOCKA_LIBRARY ${CMOCKA_ROOT}/lib/libcmocka.dll.a)
 set(CMOCKA_DLL ${CMOCKA_ROOT}/bin/cmocka.dll)
 
-# 验证
+# 验证 CMocka 文件是否存在
 if(EXISTS ${CMOCKA_LIBRARY} AND EXISTS ${CMOCKA_DLL})
     set(HAVE_CMOCKA TRUE)
     message(STATUS "Found CMocka library: ${CMOCKA_LIBRARY}")
@@ -40,7 +48,7 @@ else()
         message(WARNING "CMocka library (.dll.a) not found at ${CMOCKA_LIBRARY}")
     endif()
     if(NOT EXISTS ${CMOCKA_DLL})
-        message(WARNING "CMocka DLL not found at ${CMOCKA_DLL} - 请检查文件是否存在")
+        message(WARNING "CMocka DLL not found at ${CMOCKA_DLL}")
     endif()
 endif()
 
@@ -58,6 +66,8 @@ set(QUERY_DIR ${PROJECT_SOURCE_DIR}/query)
 set(PLAN_DIR ${PROJECT_SOURCE_DIR}/plan)
 set(PARSE_DIR ${PROJECT_SOURCE_DIR}/parse)
 set(INDEX_DIR ${PROJECT_SOURCE_DIR}/index)
+set(ERROR_DIR ${PROJECT_SOURCE_DIR}/error)
+set(TRACE_DIR ${PROJECT_SOURCE_DIR}/trace)
 
 # ========== 源文件 ==========
 set(LIB_SOURCES
@@ -67,10 +77,11 @@ set(LIB_SOURCES
         ${LIB_DIR}/RBT.c
         ${LIB_DIR}/CMap.c
         ${LIB_DIR}/Error.c
+        ${ERROR_DIR}/DBError.c
         ${LIB_DIR}/map.c
         ${LIB_DIR}/Trie.c
         ${LIB_DIR}/StreamTokenizer.c
-        ${LIB_DIR}/List.c
+        ${LIB_DIR}/CList.c
 )
 
 set(FILE_SOURCES
@@ -165,6 +176,10 @@ set(DB_SOURCES
         ${DB_DIR}/DBMS.c
 )
 
+set(TRACE_SOURCES
+        ${TRACE_DIR}/DBTrace.c
+)
+
 # ========== 核心库 ==========
 add_library(core STATIC
         ${LIB_SOURCES}
@@ -179,6 +194,7 @@ add_library(core STATIC
         ${PARSE_SOURCES}
         ${INDEX_SOURCES}
         ${DB_SOURCES}
+        ${TRACE_SOURCES}
 )
 
 target_include_directories(core PUBLIC
@@ -196,6 +212,8 @@ target_include_directories(core PUBLIC
         ${PARSE_DIR}
         ${INDEX_DIR}
         ${DB_DIR}
+        ${ERROR_DIR}
+        ${TRACE_DIR}
         ${TEST_DIR}
 )
 
@@ -209,7 +227,7 @@ macro(add_cmocka_test TEST_NAME SOURCE_FILE)
         add_executable(${TEST_NAME} ${SOURCE_FILE})
         target_link_libraries(${TEST_NAME} PRIVATE core ${CMOCKA_LIBRARY})
 
-        # 关键：构建时自动复制 DLL 到输出目录
+        # Windows 构建后复制 CMocka DLL 到测试程序输出目录
         if(WIN32 AND CMOCKA_DLL)
             add_custom_command(TARGET ${TEST_NAME} POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -228,12 +246,19 @@ if(HAVE_CMOCKA)
 
     # File 模块测试
     add_cmocka_test(FileManagerTest ${TEST_DIR}/File/FileManagerTest.c)
+    add_cmocka_test(FileManagerBasicTest ${TEST_DIR}/File/FileManagerBasicTest.c)
 
     # Lib 模块测试
     add_cmocka_test(CStringTest ${TEST_DIR}/Lib/CStringTest.c)
+    add_cmocka_test(CListTest ${TEST_DIR}/Lib/CListTest.c)
+    add_cmocka_test(LibBasicTest ${TEST_DIR}/Lib/LibBasicTest.c)
+
+    # Error 模块测试
+    add_cmocka_test(DBErrorTest ${TEST_DIR}/error/DBErrorTest.c)
 
     # Log 模块测试
     add_cmocka_test(LogTest ${TEST_DIR}/Log/LogTest.c)
+    add_cmocka_test(LogManagerBasicTest ${TEST_DIR}/Log/LogManagerBasicTest.c)
 
     # Buffer 模块测试
     add_cmocka_test(BufferManagerTest ${TEST_DIR}/buffer/BufferManagerTest.c)
