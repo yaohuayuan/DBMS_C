@@ -279,6 +279,7 @@ if(HAVE_CMOCKA)
 
     # Plan 模块测试
     add_cmocka_test(PlanTest ${TEST_DIR}/plan/PlanTest.c)
+    add_cmocka_test(PlanScanBasicTest ${TEST_DIR}/plan/PlanScanBasicTest.c)
 
     # Parse 模块测试
     add_cmocka_test(ParserTest ${TEST_DIR}/parse/ParserTest.c)
