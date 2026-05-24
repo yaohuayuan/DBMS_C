@@ -2,16 +2,320 @@
 \label{chap:update}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:update-purpose}
+
+第8章已经观察了 SQL 文本如何被解析为结构化的 Data 对象，第9章进一步观察了 SELECT 查询如何从 \codepath{QueryData} 变成 Plan 和 Scan。本章只关注另一条主线：更新类 SQL 如何从解析结果进入 \codepath{PlannerExecuteUpdate}，再由 \codepath{BasicUpdatePlanner} 分发到具体执行函数。
+
+本章的实验目标是理解 DBMS\_C 中 CREATE TABLE、INSERT、UPDATE、DELETE、CREATE VIEW 和 CREATE INDEX 的命令级执行路径。这里的“更新”不是只指 SQL UPDATE，而是指所有会改变数据库状态或元数据目录的命令。本章不展开复杂事务恢复，也不重复查询计划细节；这些内容已经分别在第5章和第9章讨论。
+
+\section{更新执行在系统中的位置}
+\label{sec:update-position}
+
+更新执行位于 Parser 之后、元数据管理和记录访问之前。Parser 负责把命令解析为 \codepath{CommandData}；\codepath{PlannerExecuteUpdate} 根据命令类型做分发；\codepath{BasicUpdatePlanner} 根据不同命令调用元数据管理器或打开表扫描器执行修改。
+
+图 \ref{fig:update-position} 展示了本章关注的主链路。可以看到，CREATE TABLE、CREATE VIEW、CREATE INDEX 主要走元数据登记路径，而 INSERT、UPDATE、DELETE 会打开表扫描并修改记录。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dblevel] (sql) {更新类 SQL};
+    \node[dbnode, right=of sql] (parser) {Parser\\CommandData};
+    \node[dbnode, right=of parser] (planner) {PlannerExecuteUpdate\\按命令类型分发};
+    \node[dbnode, below left=of planner] (metadata) {MetadataManager\\登记表/视图/索引};
+    \node[dbnode, below right=of planner] (scan) {TablePlan + Scan\\插入/修改/删除记录};
+    \node[dbsubnode, below=of metadata] (catalog) {tblcat / fldcat\\viewcat / idxcat};
+    \node[dbsubnode, below=of scan] (record) {RecordPage / TableScan\\实际记录变化};
+
+    \draw[dbarrow] (sql) -- (parser);
+    \draw[dbarrow] (parser) -- (planner);
+    \draw[dbdown] (planner) -- (metadata);
+    \draw[dbdown] (planner) -- (scan);
+    \draw[dbdown] (metadata) -- (catalog);
+    \draw[dbdown] (scan) -- (record);
+  \end{tikzpicture}}
+  \caption{更新执行在 DBMS\_C 主链路中的位置}
+  \label{fig:update-position}
+\end{figure}
 
 \section{相关源码文件}
-TODO
+\label{sec:update-source-files}
+
+表 \ref{tab:update-source-files} 列出本章直接涉及的真实源码文件。阅读时建议先看 \codepath{Planner.c} 中的入口，再看 \codepath{BasicUpdatePlanner.c} 中每个 Execute 函数，最后回到 metadata 和 record 层观察结果如何落地。
+
+\begin{longtable}{>{\ttfamily}p{0.36\textwidth} p{0.56\textwidth}}
+  \caption{更新执行相关源码文件}
+  \label{tab:update-source-files}\\
+  \toprule
+  文件 & 本章关注点 \\
+  \midrule
+  \endfirsthead
+  \caption[]{更新执行相关源码文件（续）}\\
+  \toprule
+  文件 & 本章关注点 \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+  plan/Planner.h, plan/Planner.c & 更新执行入口 \apiname{PlannerExecuteUpdate}，负责解析命令并按 \codepath{CommandCode} 分发。\\
+  plan/BasicUpdatePlanner.h, plan/BasicUpdatePlanner.c & CREATE TABLE、INSERT、UPDATE、DELETE、CREATE VIEW、CREATE INDEX 的具体高层执行逻辑。\\
+  parse/Parser.h, parse/Parser.c & \apiname{ParserUpdateCmd} 把更新类 SQL 转换为 \codepath{CommandData}。\\
+  parse/InsertData.h, parse/ModifyData.h, parse/DeleteData.h & INSERT、UPDATE、DELETE 的解析结果对象。\\
+  parse/CreateTableData.h, parse/CreateViewData.h, parse/CreateIndexData.h & CREATE TABLE、CREATE VIEW、CREATE INDEX 的解析结果对象。\\
+  metadata/MetadataManager.h, metadata/MetadataManager.c & 表、视图、索引元数据登记和读取入口。\\
+  record/TableScan.h, record/TableScan.c & INSERT、UPDATE、DELETE 执行时使用的表扫描和记录修改接口。\\
+  query/Scan.h, query/Scan.c & 统一 Scan 接口，BasicUpdatePlanner 通过该接口调用 insert、delete、setVal。\\
+  tx/Transaction.h, tx/Transaction.c & 更新执行所在事务上下文，最终提交时确认事务状态。\\
+\end{longtable}
+
+\section{PlannerExecuteUpdate 与 BasicUpdatePlanner}
+\label{sec:update-planner}
+
+\codepath{PlannerExecuteUpdate} 是更新类命令的统一入口。它先创建 Parser，再调用 \apiname{ParserUpdateCmd} 得到 \codepath{CommandData}。随后根据 \codepath{commandData->code} 选择对应的 \codepath{BasicUpdatePlannerExecute*} 函数。
+
+图 \ref{fig:update-dispatch} 展示了这个分发关系。它不是复杂优化器，而是一个清晰的命令路由器：解析阶段已经识别出命令类型，执行阶段只需要进入相应分支。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.94\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=7mm and 9mm]
+    \node[dblevel] (entry) {PlannerExecuteUpdate};
+    \node[dbnode, below=of entry] (cmd) {CommandData\\code + data union};
+    \node[dbnode, below left=of cmd] (meta) {CreateTable\\CreateView\\CreateIndex};
+    \node[dbnode, below right=of cmd] (record) {Insert\\Modify\\Delete};
+    \node[dbsubnode, below=of meta] (mgr) {MetadataManager};
+    \node[dbsubnode, below=of record] (scan) {TablePlan / Scan};
+
+    \draw[dbdown] (entry) -- (cmd);
+    \draw[dbdown] (cmd) -- (meta);
+    \draw[dbdown] (cmd) -- (record);
+    \draw[dbdown] (meta) -- (mgr);
+    \draw[dbdown] (record) -- (scan);
+  \end{tikzpicture}}
+  \caption{PlannerExecuteUpdate 的命令分发}
+  \label{fig:update-dispatch}
+\end{figure}
+
+表 \ref{tab:command-to-update-function} 把命令类型和执行函数对应起来。本章测试会覆盖表中的所有基础命令。
+
+\begin{table}[htbp]
+  \centering
+  \caption{CommandData 与 BasicUpdatePlanner 函数映射}
+  \label{tab:command-to-update-function}
+  \begin{tabularx}{\textwidth}{l l Y}
+    \toprule
+    命令类型 & 执行函数 & 主要动作 \\
+    \midrule
+    \codepath{CMD_CREATE_TABLE} & \codepath{BasicUpdatePlannerExecuteCreateTable} & 调用 \codepath{MetadataMgrCreateTable} 登记表结构。\\
+    \codepath{CMD_INSERT_DATA} & \codepath{BasicUpdatePlannerExecuteInsert} & 打开表扫描，插入新 slot，并按字段写入值。\\
+    \codepath{CMD_MODIFY_DATA} & \codepath{BasicUpdatePlannerExecuteModify} & 使用 SelectPlan 定位匹配记录，计算新值并调用 \codepath{setVal}。\\
+    \codepath{CMD_DELETE_DATA} & \codepath{BasicUpdatePlannerExecuteDelete} & 使用 SelectPlan 定位匹配记录，并调用 \codepath{delete}。\\
+    \codepath{CMD_CREATE_VIEW} & \codepath{BasicUpdatePlannerExecuteCreateView} & 将 \codepath{QueryData} 转为视图定义字符串并登记到 \codepath{viewcat}。\\
+    \codepath{CMD_CREATE_INDEX} & \codepath{BasicUpdatePlannerExecuteCreateIndex} & 调用 \codepath{MetadataMgrCreateIndex} 登记索引信息到 \codepath{idxcat}。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{各类更新命令的执行路径}
+\label{sec:update-command-paths}
+
+CREATE TABLE、CREATE VIEW 和 CREATE INDEX 属于元数据登记路径。它们不会直接插入用户表记录，而是修改系统目录表。例如 CREATE TABLE 会登记表名、字段名、字段类型和长度；CREATE VIEW 会登记视图名和视图定义；CREATE INDEX 会登记索引名、表名和字段名。
+
+图 \ref{fig:update-metadata-path} 展示了这三类命令与系统目录的关系。这里的系统目录不是抽象概念，而是由前面元数据章节讨论过的 \codepath{tblcat}、\codepath{fldcat}、\codepath{viewcat} 和 \codepath{idxcat} 支撑。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.88\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dblevel] (create) {CREATE 命令};
+    \node[dbnode, below left=of create] (table) {CREATE TABLE};
+    \node[dbnode, below=of create] (view) {CREATE VIEW};
+    \node[dbnode, below right=of create] (index) {CREATE INDEX};
+    \node[dbsubnode, below=of table] (tblcat) {tblcat / fldcat};
+    \node[dbsubnode, below=of view] (viewcat) {viewcat};
+    \node[dbsubnode, below=of index] (idxcat) {idxcat};
+
+    \draw[dbdown] (create) -- (table);
+    \draw[dbdown] (create) -- (view);
+    \draw[dbdown] (create) -- (index);
+    \draw[dbdown] (table) -- (tblcat);
+    \draw[dbdown] (view) -- (viewcat);
+    \draw[dbdown] (index) -- (idxcat);
+  \end{tikzpicture}}
+  \caption{CREATE TABLE / VIEW / INDEX 的元数据登记路径}
+  \label{fig:update-metadata-path}
+\end{figure}
+
+INSERT、UPDATE 和 DELETE 属于记录修改路径。它们会构造 \codepath{TablePlan}，打开为 \codepath{Scan}，再通过统一 Scan 接口插入、设置或删除记录。图 \ref{fig:update-record-path} 展示了这三类命令的共同骨架。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.94\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 10mm]
+    \node[dblevel] (cmd) {INSERT / UPDATE / DELETE};
+    \node[dbnode, right=of cmd] (planner) {BasicUpdatePlanner};
+    \node[dbnode, right=of planner] (tableplan) {TablePlan};
+    \node[dbnode, below=of tableplan] (scan) {Scan / TableScan};
+    \node[dbsubnode, left=of scan] (action) {insert\\setVal\\delete};
+    \node[dbsubnode, left=of action] (record) {RecordPage\\slot 变化};
+
+    \draw[dbarrow] (cmd) -- (planner);
+    \draw[dbarrow] (planner) -- (tableplan);
+    \draw[dbdown] (tableplan) -- node[right,font=\footnotesize]{open} (scan);
+    \draw[dbarrow] (scan) -- (action);
+    \draw[dbarrow] (action) -- (record);
+  \end{tikzpicture}}
+  \caption{INSERT / UPDATE / DELETE 的记录修改链路}
+  \label{fig:update-record-path}
+\end{figure}
+
+需要注意的是，UPDATE 和 DELETE 并不是直接遍历整表后立刻改动所有记录，而是在 \codepath{TablePlan} 外包一层 \codepath{SelectPlan}。因此 WHERE 谓词仍然由第9章讲过的 Scan 过滤机制负责，只是过滤出来的记录会被修改或删除。
 
 \section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+\label{sec:update-test}
 
-\section{实验内容}
-TODO
+本章新增配套测试：
+
+\begin{itemize}
+  \item \codepath{test/plan/UpdateBasicTest.c}
+\end{itemize}
+
+该测试使用独立测试数据库目录，目录名前缀为 \codepath{update_basic_test_db}，日志文件为 \codepath{update_basic.log}。每个用例都会创建 FileManager、LogManager、BufferManager、Transaction、MetadataManager 和 Planner，然后从 \codepath{PlannerExecuteUpdate} 入口执行 SQL 命令。测试不调用 \codepath{BasicUpdatePlannerExecute*} 的内部实现细节，而是用元数据接口和 TableScan 验证执行结果。
+
+\begin{table}[htbp]
+  \centering
+  \caption{UpdateBasicTest 覆盖内容}
+  \label{tab:update-basic-tests}
+  \begin{tabularx}{\textwidth}{l Y}
+    \toprule
+    测试函数 & 主要断言 \\
+    \midrule
+    \codepath{test_update_planner_create_table_and_insert} & 断言 CREATE TABLE 返回 0；读回 Layout，断言 id/name 字段存在、类型和长度正确；执行两条 INSERT，断言返回值均为 1；用 TableScan 读回两条记录，断言 \codepath{id=1,name=wang} 和 \codepath{id=2,name=li} 存在；提交事务并断言状态为 \codepath{TX_TRANSACTION_COMMIT}。\\
+    \codepath{test_update_planner_modify_and_delete} & 先建表并插入两条记录；执行 UPDATE，断言返回 1，且 \codepath{id=1} 的 name 变为 \codepath{newwang}；执行 DELETE，断言返回 1，且 \codepath{id=2} 不再出现；断言剩余记录数为 1；提交事务。\\
+    \codepath{test_update_planner_create_view_and_index} & 执行 CREATE VIEW，断言可通过 \codepath{MetadataMgrGetViewDef} 读回视图定义；执行 CREATE INDEX，断言 \codepath{MetadataManagerGetIndexInfo} 返回一个索引信息，且字段 id 对应索引名为 \codepath{idx_upd_id}；提交事务。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+本章测试已在临时构建目录 \codepath{build-updatecheck2} 中验证通过。单独运行本章测试：
+
+\begin{dbcode}[listing options={language=bash}]{运行 UpdateBasicTest}
+ctest --test-dir build-updatecheck2 --output-on-failure -R UpdateBasicTest
+\end{dbcode}
+
+如需同时运行 Plan 和 Update 相关测试：
+
+\begin{dbcode}[listing options={language=bash}]{运行 Plan/Update 相关测试}
+ctest --test-dir build-updatecheck2 --output-on-failure -R "Update|Plan"
+\end{dbcode}
+
+\section{关键代码讲解}
+\label{sec:update-code}
+
+第一段代码来自 \codepath{plan/Planner.c} 的 \apiname{PlannerExecuteUpdate}。它体现了更新执行的统一入口：Parser 负责识别命令，Planner 根据 \codepath{CommandCode} 分发。
+
+\begin{dbcode}{PlannerExecuteUpdate 的命令分发}
+int PlannerExecuteUpdate(Planner*planner,CString *cmd,Transaction*transaction){
+    Parser*parser = ParserInit(CStringGetPtr(cmd));
+    CommandData *commandData = ParserUpdateCmd(parser);
+    CommandDataTrace(commandData);
+    CommandCode commandCode = commandData->code;
+    if(commandCode==CMD_INSERT_DATA){
+        return BasicUpdatePlannerExecuteInsert(planner->updatePlanner,
+                                               commandData->data.insertData,
+                                               transaction);
+    }else if(commandCode==CMD_DELETE_DATA){
+        return BasicUpdatePlannerExecuteDelete(planner->updatePlanner,
+                                               commandData->data.deleteData,
+                                               transaction);
+    }
+    /* 其他 CREATE / MODIFY 分支同样转给 BasicUpdatePlanner */
+    return 0;
+}
+\end{dbcode}
+
+第二段代码来自 \codepath{plan/BasicUpdatePlanner.c} 的 INSERT 执行函数。它先为目标表创建 \codepath{TablePlan}，打开为 Scan，然后插入一条记录并逐字段写入值。
+
+\begin{dbcode}{BasicUpdatePlannerExecuteInsert 的核心逻辑}
+TablePlan *tablePlan = TablePlanInit(transaction,data->tblname,
+                                     basicUpdatePlanner->metadataMgr);
+Plan *plan = PlanInit(tablePlan,PLAN_TABLE_CODE);
+Scan *scan = plan->open(plan);
+scan->insert(scan);
+CListNode *fldHead = data->flds->head;
+CListNode *valHead = data->vals->head;
+while (fldHead){
+    Constant *val = ((Constant *)valHead->data);
+    CString*fldname = ((CString *)fldHead->data);
+    scan->setVal(scan,fldname,val);
+    fldHead = fldHead->next;
+    valHead = valHead->next;
+}
+\end{dbcode}
+
+第三段代码来自 UPDATE 执行函数。它把目标表包装为 \codepath{SelectPlan}，只对满足谓词的记录计算新值并调用 \codepath{setVal}。
+
+\begin{dbcode}{BasicUpdatePlannerExecuteModify 的核心逻辑}
+TablePlan *tablePlan = TablePlanInit(transaction,data->tblname,
+                                     basicUpdatePlanner->metadataMgr);
+Plan *plan = PlanInit(tablePlan,PLAN_TABLE_CODE);
+SelectPlan *selectPlan = SelectPlanInit(plan,data->predicate);
+plan = PlanInit(selectPlan,PLAN_SELECT_CODE);
+Scan *scan = plan->open(plan);
+int count = 0;
+while (scan->next(scan)){
+    Constant *val = ExpressionEvaluate(data->newVal,scan);
+    scan->setVal(scan,data->fldname,val);
+    count++;
+}
+\end{dbcode}
+
+第四段代码来自 CREATE VIEW 和 CREATE INDEX 的执行逻辑。它们不直接修改用户表记录，而是调用元数据管理器登记定义。
+
+\begin{dbcode}{CREATE VIEW 和 CREATE INDEX 的元数据登记}
+int BasicUpdatePlannerExecuteCreateView(BasicUpdatePlanner *planner,
+                                        CreateViewData *data,
+                                        Transaction*transaction){
+    char *viewDefStr = QueryDataToString(data->queryData);
+    CString *viewDef = CStringCreateFromCStr(viewDefStr);
+    MetadataMgrCreateView(planner->metadataMgr,data->viewName,
+                          viewDef,transaction);
+    CStringDestroy(viewDef);
+    return 0;
+}
+
+int BasicUpdatePlannerExecuteCreateIndex(BasicUpdatePlanner *planner,
+                                         CreateIndexData *data,
+                                         Transaction*transaction){
+    MetadataMgrCreateIndex(planner->metadataMgr,data->idxname,
+                           data->tblname,data->fldname,transaction);
+    return 0;
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:update-run-observe}
+
+本章验证使用临时构建目录 \codepath{build-updatecheck2}，没有使用旧 \codepath{build} 目录，也没有同步任何 CMake 生成的 \codepath{.tmp} 文件。测试通过后，可以重点观察以下问题：
+
+\begin{itemize}
+  \item CREATE TABLE 是否能通过 \codepath{MetadataMgrGetLayout} 读回字段类型和长度。
+  \item INSERT 是否通过返回值和 TableScan 读回结果共同确认记录写入。
+  \item UPDATE 是否只修改满足 WHERE 谓词的记录。
+  \item DELETE 是否只删除满足 WHERE 谓词的记录。
+  \item CREATE VIEW 是否把 QueryData 转成可读回的视图定义字符串。
+  \item CREATE INDEX 是否在 \codepath{idxcat} 中登记索引名、表名和字段名。
+\end{itemize}
+
+这里还可以观察一个容易忽略的实现边界：系统目录字段有固定长度。本章测试使用较短索引名 \codepath{idx_upd_id}，是为了符合当前 \codepath{idxcat} 字段长度，避免测试因为目录字段截断而失败。这个限制来自当前实现，本章不通过修改元数据字段长度来绕过它。
 
 \section{思考题}
-TODO
+\label{sec:update-questions}
+
+\begin{enumerate}
+  \item 为什么 DBMS\_C 把 SELECT 查询和更新类命令分成 \codepath{CreateQueryPlan} 与 \codepath{ExecuteUpdate} 两条入口？
+  \item INSERT、UPDATE、DELETE 都会打开表扫描器，它们对 Scan 接口的使用有什么相同点和不同点？
+  \item CREATE TABLE、CREATE VIEW、CREATE INDEX 为什么可以看作“修改系统目录”的操作？
+  \item UPDATE 和 DELETE 为什么需要先经过 \codepath{SelectPlan}？
+  \item 如果系统目录字段长度过短，会对表名、字段名、索引名产生什么影响？
+\end{enumerate}
