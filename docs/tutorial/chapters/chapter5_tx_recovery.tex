@@ -6,7 +6,7 @@
 
 本章用于理解 DBMS\_C 中事务层的基本职责。事务并不是单独完成读写的模块，它会把文件层、日志层、缓冲区层、并发控制层和恢复层组织在一起，对上层提供相对统一的读写入口。
 
-本轮只完成事务基础实验，也就是验证 \codepath{Transaction} 如何通过 \codepath{BufferList} 使用 \codepath{BufferManager}，并在提交时把修改写回到底层文件。并发锁、死锁检测、回滚恢复和崩溃恢复属于后续实验内容，本章只保留 TODO，不提前展开。
+本章当前已经完成三个基础阶段：5A 验证 \codepath{Transaction} 如何通过 \codepath{BufferList} 使用 \codepath{BufferManager}，并在提交时把修改写回到底层文件；5B 验证 \codepath{LockTable} 和 \codepath{ConCurrencyManager} 的基础加锁与释放行为；5C 验证 \codepath{RecoveryManager} 通过旧值日志完成最小整数回滚。死锁检测和崩溃恢复属于后续扩展内容，本章只保留边界说明，不提前展开。
 
 \section{模块作用}
 \label{sec:tx-role}
@@ -250,6 +250,241 @@ void TransactionCommit(Transaction*transaction){
 }
 \end{dbcode}
 
+\section{5B 并发锁基础实验}
+\label{sec:tx-concurrency-basic}
+
+事务层在读写块之前会先进入并发控制模块。当前实现中，读操作通过 \apiname{ConCurrencyManagerSLock} 获取共享锁，写操作通过 \apiname{ConCurrencyManagerXLock} 获取排他锁；提交或回滚时，\apiname{ConCurrencyManagerRelease} 会释放当前事务管理器记录的所有锁。
+
+\codepath{LockTable} 是全局锁表，内部用 \codepath{map\_int\_t} 记录每个 \codepath{BlockID} 对应的锁状态。当前约定是：值为正数表示共享锁数量，值为 \codepath{-1} 表示排他锁，值不存在或查询为 0 表示没有锁。\codepath{ConCurrencyManager} 则是事务侧的锁管理器，它用 \codepath{map\_str\_t} 记录当前事务已经持有的锁类型，例如 \codepath{"S"} 或 \codepath{"X"}。
+
+图 \ref{fig:tx-concurrency-objects} 展示了事务、并发管理器、锁表和块标识之间的关系。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 14mm]
+    \node[dblevel] (tx) {Transaction};
+    \node[dbnode, right=of tx] (cm) {ConCurrencyManager\\当前事务持锁记录};
+    \node[dbnode, right=of cm] (lt) {LockTable\\全局 BlockID 锁状态};
+    \node[dbsubnode, below=of cm] (local) {map\_str\_t\\BlockID string -> S/X};
+    \node[dbsubnode, below=of lt] (global) {map\_int\_t\\BlockID string -> count/-1};
+    \node[dbsubnode, below=of tx] (block) {BlockID\\file name + block number};
+
+    \draw[dbarrow] (tx) -- node[above,font=\footnotesize] {SLock / XLock} (cm);
+    \draw[dbarrow] (cm) -- node[above,font=\footnotesize] {LockTableSLock / XLock} (lt);
+    \draw[dbdown] (cm) -- (local);
+    \draw[dbdown] (lt) -- (global);
+    \draw[dbarrow] (block) -- (cm);
+    \draw[dbarrow] (block) -- (lt);
+  \end{tikzpicture}}
+  \caption{Transaction、ConCurrencyManager、LockTable 与 BlockID 的关系}
+  \label{fig:tx-concurrency-objects}
+\end{figure}
+
+表 \ref{tab:tx-lock-compatibility} 给出本章采用的锁语义。当前测试不构造冲突等待，只验证单个锁表或单个事务管理器在非冲突路径上的状态变化。
+
+\begin{table}[htbp]
+  \centering
+  \caption{S 锁与 X 锁的基础兼容关系}
+  \label{tab:tx-lock-compatibility}
+  \begin{tabularx}{0.82\textwidth}{l Y Y}
+    \toprule
+    已有锁 & 新申请 S 锁 & 新申请 X 锁 \\
+    \midrule
+    无锁 & 可以获取，共享计数增加 & 可以获取，锁表值变为 -1 \\
+    S 锁 & 理论上可共享；本轮不测试多事务共享计数 & 需要等待其他 S 锁释放；本轮不测试阻塞升级 \\
+    X 锁 & 需要等待 X 锁释放；本轮不测试阻塞等待 & 同一管理器重复获取会直接返回 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+读写操作进入并发控制的调用链如图 \ref{fig:tx-lock-call-chain} 所示。读路径调用共享锁，写路径调用排他锁，最终都以 \codepath{BlockID} 的字符串形式作为锁表键。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dbnode] (get) {TransactionGetInt/String};
+    \node[dbnode, right=of get] (slock) {ConCurrencyManagerSLock};
+    \node[dbnode, right=of slock] (lts) {LockTableSLock};
+    \node[dbnode, below=of get] (set) {TransactionSetInt/String};
+    \node[dbnode, right=of set] (xlock) {ConCurrencyManagerXLock};
+    \node[dbnode, right=of xlock] (ltx) {LockTableXLock};
+    \node[dbsubnode, right=of lts] (key1) {BlockID2CString};
+    \node[dbsubnode, right=of ltx] (key2) {BlockID2CString};
+
+    \draw[dbarrow] (get) -- (slock);
+    \draw[dbarrow] (slock) -- (lts);
+    \draw[dbarrow] (lts) -- (key1);
+    \draw[dbarrow] (set) -- (xlock);
+    \draw[dbarrow] (xlock) -- (ltx);
+    \draw[dbarrow] (ltx) -- (key2);
+  \end{tikzpicture}}
+  \caption{读写操作获取 S 锁和 X 锁的调用链}
+  \label{fig:tx-lock-call-chain}
+\end{figure}
+
+锁释放由 \apiname{ConCurrencyManagerRelease} 统一完成。它遍历当前事务管理器的本地锁记录，对每个键调用 \apiname{LockTableUnLock}，再从本地 map 中删除该键。图 \ref{fig:tx-lock-release} 展示了这个过程。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.86\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dbnode] (release) {ConCurrencyManagerRelease};
+    \node[dbnode, right=of release] (iter) {遍历 mapStr};
+    \node[dbnode, right=of iter] (unlock) {LockTableUnLock};
+    \node[dbnode, below=of iter] (remove) {map\_remove 本地锁记录};
+    \node[dbsubnode, right=of unlock] (global) {全局 LockTable 状态清除};
+
+    \draw[dbarrow] (release) -- (iter);
+    \draw[dbarrow] (iter) -- (unlock);
+    \draw[dbdown] (iter) -- (remove);
+    \draw[dbarrow] (unlock) -- (global);
+  \end{tikzpicture}}
+  \caption{release all 锁释放示意图}
+  \label{fig:tx-lock-release}
+\end{figure}
+
+本轮新增的并发基础测试文件为：
+\begin{itemize}
+  \item \codepath{test/tx/ConcurrencyBasicTest.c}
+\end{itemize}
+
+\begin{table}[htbp]
+  \centering
+  \caption{ConcurrencyBasicTest 覆盖内容}
+  \label{tab:tx-concurrency-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_lock\_table\_slock\_then\_unlock & 直接验证 LockTable 获取 S 锁后锁值为 1，释放后锁值恢复为 0。\\
+    test\_lock\_table\_xlock\_then\_unlock & 直接验证 LockTable 获取 X 锁后锁值为 -1，释放后锁值恢复为 0。\\
+    test\_concurrency\_manager\_tracks\_s\_and\_x\_locks & 验证 ConCurrencyManager 会在本地记录 S/X 锁类型，并能识别 X 锁。\\
+    test\_concurrency\_manager\_release\_allows\_relock & 验证 release all 后，本地锁记录清空，并且另一个管理器可以重新获取同一 BlockID 的锁。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+单独运行 5B 测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{运行并发锁基础测试}
+ctest --test-dir build --output-on-failure -R Concurrency
+\end{dbcode}
+
+本轮没有测试复杂阻塞场景，原因有三点：第一，当前 \codepath{LockTableSLock} 和 \codepath{LockTableXLock} 在冲突时采用等待循环，并通过时间判断退出，测试会变慢且不稳定；第二，本章目标是锁基础状态，不是多事务调度压力测试；第三，\codepath{DeadlockDetector} 的等待图和环检测属于后续独立实验，不能在没有专门测试设计的情况下混入本轮。
+
+\section{5C 恢复与回滚基础实验}
+\label{sec:tx-recovery-basic}
+
+恢复管理模块负责在事务修改数据前记录足够的信息，使事务回滚时可以把被修改的数据恢复到旧值。当前实现中，\codepath{TransactionSetInt} 和 \codepath{TransactionSetString} 在 \codepath{okToLog} 为 true 时，会调用 \codepath{RecoverySetInt} 或 \codepath{RecoverySetString} 记录修改前的旧值；随后才真正修改缓冲页。
+
+\codepath{RecoveryManager} 位于事务层内部，连接 \codepath{LogManager} 与 \codepath{BufferManager}。日志记录的具体格式由 \codepath{LogRecord} 负责解析和执行 undo。图 \ref{fig:tx-recovery-objects} 展示了当前 rollback 基础路径中几个对象之间的关系。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 13mm]
+    \node[dblevel] (tx) {Transaction};
+    \node[dbnode, right=of tx] (rm) {RecoveryManager\\commit / rollback / set old value};
+    \node[dbnode, right=of rm] (log) {LogManager\\append / iterator / flush};
+    \node[dbnode, below=of rm] (buf) {BufferManager\\flush modified buffers};
+    \node[dbsubnode, below=of log] (record) {LogRecord\\START / SETINT / COMMIT / ROLLBACK};
+    \node[dbsubnode, below=of buf] (page) {Buffer + Page\\current data value};
+
+    \draw[dbarrow] (tx) -- (rm);
+    \draw[dbarrow] (rm) -- (log);
+    \draw[dbdown] (rm) -- (buf);
+    \draw[dbdown] (log) -- (record);
+    \draw[dbdown] (buf) -- (page);
+    \draw[dbdashline] (record) -- node[below,font=\footnotesize] {undo old value} (page);
+  \end{tikzpicture}}
+  \caption{Transaction、RecoveryManager、LogManager 与 BufferManager 的关系}
+  \label{fig:tx-recovery-objects}
+\end{figure}
+
+为什么要在修改前记录旧值？因为 rollback 的核心不是“撤销函数调用”，而是把数据页恢复成修改之前的内容。以整数写入为例，\apiname{RecoverySetInt} 会先从当前 \codepath{Buffer->page} 读出旧值，再调用 \apiname{SetIntRecordWriteToLog} 把事务号、文件块、偏移量和旧值写入日志。图 \ref{fig:tx-setint-log} 展示了这个记录过程。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dbnode] (set) {TransactionSetInt\\new value};
+    \node[dbnode, right=of set] (recset) {RecoverySetInt};
+    \node[dbnode, right=of recset] (old) {PageGetInt\\read old value};
+    \node[dbnode, below=of recset] (log) {SetIntRecordWriteToLog};
+    \node[dbsubnode, right=of log] (fields) {txNum, BlockID, offset, oldVal};
+    \node[dbnode, below=of set] (write) {PageSetInt\\write new value};
+    \node[dbnode, right=of write] (mark) {BufferSetModified\\txNum + lsn};
+
+    \draw[dbarrow] (set) -- (recset);
+    \draw[dbarrow] (recset) -- (old);
+    \draw[dbdown] (recset) -- (log);
+    \draw[dbarrow] (log) -- (fields);
+    \draw[dbdown] (set) -- (write);
+    \draw[dbarrow] (write) -- (mark);
+  \end{tikzpicture}}
+  \caption{SETINT 修改前记录旧值日志的过程}
+  \label{fig:tx-setint-log}
+\end{figure}
+
+rollback 时，\apiname{RecoveryDoRollback} 会通过日志迭代器从后向前读取日志，找到当前事务的日志记录。如果遇到 \codepath{SETINT} 记录，就调用该记录的 undo 函数，把记录中的旧值写回原来的 \codepath{BlockID} 和 offset；如果遇到当前事务的 \codepath{START} 记录，说明这个事务的回滚扫描结束。图 \ref{fig:tx-rollback-flow} 展示了这条基础链路。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dbnode] (rollback) {TransactionRollback};
+    \node[dbnode, right=of rollback] (do) {RecoveryDoRollback};
+    \node[dbnode, right=of do] (iter) {LogIterator\\reverse scan};
+    \node[dbnode, below=of iter] (parse) {LogRecordInit};
+    \node[dbnode, left=of parse] (undo) {LogRecordUnDo};
+    \node[dbnode, left=of undo] (restore) {TransactionSetInt(..., false)\\restore old value};
+    \node[dbnode, below=of do] (finish) {write ROLLBACK record\\flush log};
+
+    \draw[dbarrow] (rollback) -- (do);
+    \draw[dbarrow] (do) -- (iter);
+    \draw[dbdown] (iter) -- (parse);
+    \draw[dbarrow] (parse) -- (undo);
+    \draw[dbarrow] (undo) -- (restore);
+    \draw[dbdown] (do) -- (finish);
+  \end{tikzpicture}}
+  \caption{rollback 恢复旧值的基础流程}
+  \label{fig:tx-rollback-flow}
+\end{figure}
+
+表 \ref{tab:tx-commit-rollback} 对比了本章已经测试到的提交和回滚行为。这里的回滚只覆盖单事务、单整数旧值恢复，不代表完整崩溃恢复能力。
+
+\begin{table}[htbp]
+  \centering
+  \caption{commit 与 rollback 基础行为对比}
+  \label{tab:tx-commit-rollback}
+  \begin{tabularx}{\textwidth}{l Y Y}
+    \toprule
+    操作 & 当前实现中的核心动作 & 本章测试覆盖情况 \\
+    \midrule
+    commit & flush 当前事务修改过的 Buffer，写入 COMMIT 日志，释放锁和 Buffer。 & TransactionBasicTest 验证提交后 int 能从文件读回。\\
+    rollback & 倒序扫描日志，对 SETINT/SETSTRING 调用 undo，写入 ROLLBACK 日志，释放锁和 Buffer。 & RecoveryBasicTest 验证 SETINT 旧值能恢复。\\
+    crash recovery & 扫描日志，跳过已提交或已回滚事务，对未完成事务执行 undo。 & 本章不测试，留作后续扩展。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+本轮新增的恢复基础测试文件为：
+\begin{itemize}
+  \item \codepath{test/tx/RecoveryBasicTest.c}
+\end{itemize}
+
+该测试使用独立数据库目录、独立数据文件和日志文件。测试流程是：先启动一个事务写入初始整数并提交；再启动第二个事务读取旧值、使用 \codepath{TransactionSetInt(..., true)} 修改该整数；随后调用 \codepath{TransactionRollback}；最后从文件块读回并断言值恢复为旧值。
+
+单独运行 5C 测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{运行恢复与回滚基础测试}
+ctest --test-dir build --output-on-failure -R Recovery
+\end{dbcode}
+
+本轮没有测试字符串回滚、多事务交错和崩溃恢复。字符串日志路径在当前实现中涉及字符串生命周期和记录长度细节，适合单独补测试；多事务交错会同时牵涉锁、日志顺序和缓冲区替换；崩溃恢复需要重新打开数据库环境并验证未完成事务的 undo 结果，应作为后续更完整的恢复实验推进。
+
 \section{运行与观察}
 \label{sec:tx-run-observe}
 
@@ -257,10 +492,14 @@ void TransactionCommit(Transaction*transaction){
 
 \begin{enumerate}
   \item 运行 \codepath{ctest --test-dir build --output-on-failure -R Transaction}，确认事务基础测试通过。
+  \item 运行 \codepath{ctest --test-dir build --output-on-failure -R Concurrency}，确认并发锁基础测试通过。
+  \item 运行 \codepath{ctest --test-dir build --output-on-failure -R Recovery}，确认恢复与回滚基础测试通过。
   \item 观察 \codepath{TransactionInit} 是否为事务创建必要的协作对象。
   \item 观察 pin/unpin 前后 \codepath{TransactionAvailableBuffs} 的变化，理解事务如何占用和释放 Buffer。
   \item 观察 \codepath{TransactionSetInt} 写入后，提交是否能让 \codepath{FileManagerRead} 从文件块中读回相同整数。
-  \item 注意本轮没有断言 rollback、死锁检测和崩溃恢复，这些内容必须等对应测试补齐后再写入实验正文。
+  \item 观察 \codepath{LockTable} 中 S 锁、X 锁的数值表示，以及 \codepath{ConCurrencyManagerRelease} 如何清空本地锁记录。
+  \item 观察 \codepath{TransactionRollback} 是否能借助 SETINT 旧值日志恢复修改前的整数。
+  \item 注意本章当前没有断言 DeadlockDetector 和崩溃恢复，这些内容必须等对应测试补齐后再写入实验正文。
 \end{enumerate}
 
 \section{后续小节 TODO}
@@ -277,8 +516,8 @@ void TransactionCommit(Transaction*transaction){
     阶段 & 内容 & 当前状态 \\
     \midrule
     5A & Transaction、BufferList、BufferManager 的基础协作 & 已新增 TransactionBasicTest 并通过。\\
-    5B & 并发锁、锁表、死锁检测基础实验 & TODO：先补真实 CTest，再写正文。\\
-    5C & RecoveryManager、回滚与恢复基础实验 & TODO：先补真实 CTest，再写正文。\\
+    5B & LockTable 与 ConCurrencyManager 基础加锁释放实验 & 已新增 ConcurrencyBasicTest 并通过；DeadlockDetector 暂不展开。\\
+    5C & RecoveryManager、LogRecord 与整数旧值回滚实验 & 已新增 RecoveryBasicTest 并通过；崩溃恢复暂不展开。\\
     \bottomrule
   \end{tabularx}
 \end{table}

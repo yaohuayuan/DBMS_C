@@ -267,6 +267,8 @@ if(HAVE_CMOCKA)
     # TX 模块测试
     add_cmocka_test(TranstionTest ${TEST_DIR}/tx/TranstionTest.c)
     add_cmocka_test(TransactionBasicTest ${TEST_DIR}/tx/TransactionBasicTest.c)
+    add_cmocka_test(ConcurrencyBasicTest ${TEST_DIR}/tx/ConcurrencyBasicTest.c)
+    add_cmocka_test(RecoveryBasicTest ${TEST_DIR}/tx/RecoveryBasicTest.c)
 
     # Record 模块测试
     add_cmocka_test(RecordTest ${TEST_DIR}/record/RecordTest.c)
