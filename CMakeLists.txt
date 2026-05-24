@@ -262,6 +262,7 @@ if(HAVE_CMOCKA)
 
     # Buffer 模块测试
     add_cmocka_test(BufferManagerTest ${TEST_DIR}/buffer/BufferManagerTest.c)
+    add_cmocka_test(BufferManagerBasicTest ${TEST_DIR}/buffer/BufferManagerBasicTest.c)
 
     # TX 模块测试
     add_cmocka_test(TranstionTest ${TEST_DIR}/tx/TranstionTest.c)

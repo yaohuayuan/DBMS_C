@@ -2,16 +2,292 @@
 \label{chap:buffer}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:buffer-purpose}
+
+本章用于理解 DBMS\_C 如何在内存中缓存文件块，减少上层模块直接访问磁盘文件的次数。第2章已经看到 \codepath{FileManager} 可以把 \codepath{Page} 写入文件块或从文件块读回；本章进一步观察 \codepath{BufferManager} 如何在文件层之上维护一个固定大小的缓冲池，让上层通过 \codepath{pin} 和 \codepath{unpin} 使用块。
+
+本章只讨论缓冲区管理的基础行为：缓冲帧、pin/unpin、dirty 标记、flush 写回和替换策略接口。事务回滚、恢复算法和日志记录语义不在本章展开。
+
+\section{模块作用}
+\label{sec:buffer-role}
+
+\codepath{buffer/} 模块位于文件页式存储层之上、记录管理和事务管理层之下。它的核心职责是把磁盘块装入内存 \codepath{Buffer}，并在块被修改后按需要写回文件。上层模块不必每次访问记录都直接调用 \codepath{FileManagerRead} 或 \codepath{FileManagerWrite}，而是先向 \codepath{BufferManager} 申请 pin 某个 \codepath{BlockID}，再通过返回的 \codepath{Buffer->page} 读写页内数据。
+
+如果一个 \codepath{Buffer} 被 pin，表示当前有人正在使用它，不能被替换；如果 unpin 后 pin 计数归零，它重新变为可用帧。被修改过的 Buffer 会通过 \apiname{BufferSetModified} 记录事务号和可选 LSN，后续 flush 时写回底层文件。
 
 \section{相关源码文件}
-TODO
+\label{sec:buffer-source-files}
+
+表 \ref{tab:buffer-source-files} 列出本章涉及的真实源码文件。这里的 \codepath{ReplacementPolicy} 是接口，当前默认实现是 \codepath{LRUPolicyCreate} 返回的 LRU 策略。
+
+\begin{table}[htbp]
+  \centering
+  \caption{BufferManager 相关源码文件}
+  \label{tab:buffer-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    buffer/Buffer.h & 声明单个缓冲帧，保存 Page、BlockID、pin 计数、事务号和 LSN。\\
+    buffer/Buffer.c & 实现 \apiname{BufferPin}、\apiname{BufferUnPin}、\apiname{BufferSetModified}、\apiname{BufferFlush}、\apiname{BufferAssignToBlock}。\\
+    buffer/BufferManager.h & 声明缓冲池、可用帧数量、替换策略和 pin/unpin 等接口。\\
+    buffer/BufferManager.c & 实现查找已有 Buffer、选择未 pin 帧、pin 块、unpin 帧和按事务刷脏页。\\
+    buffer/ReplacementPolicy.h & 定义替换策略函数指针接口。\\
+    buffer/LRU/LRUCore.h, buffer/LRU/LRUCore.c & 实现 LRU 访问记录、victim 查询和移除。\\
+    buffer/LRU/LRUPolicy.h, buffer/LRU/LRUPolicy.c & 把 LRUCore 包装为 ReplacementPolicy。\\
+    File/FileManager.h & Buffer flush 和 assign 时依赖的块级读写接口。\\
+    Log/LogManager.h & Buffer flush 时如果存在 LSN，会先调用日志刷盘接口。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+从阅读顺序看，可以先看 \codepath{Buffer.c} 中单个缓冲帧的状态变化，再看 \codepath{BufferManager.c} 如何管理多个 Buffer，最后看 LRU 策略如何通过统一接口接入。
+
+\section{核心对象关系}
+\label{sec:buffer-objects}
+
+图 \ref{fig:buffer-objects} 展示了本章对象之间的关系。\codepath{BufferManager} 管理一个 \codepath{CVector} 形式的缓冲池，池中每个元素是一个 \codepath{Buffer*}；每个 \codepath{Buffer} 拥有一个 \codepath{Page}，并可绑定到某个 \codepath{BlockID}。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=10mm and 14mm]
+    \node[dblevel] (bm) {BufferManager\\bufferPool + numAvailable};
+    \node[dbnode, below left=of bm] (policy) {ReplacementPolicy/LRU\\record/evict/remove};
+    \node[dbnode, below=of bm] (buffer) {Buffer\\page + blockId + pins};
+    \node[dbnode, below right=of bm] (fm) {FileManager\\read/write block};
+    \node[dbsubnode, below=of buffer] (page) {Page\\页内字节缓冲};
+    \node[dbsubnode, right=of page] (block) {BlockID\\文件名 + 块号};
+    \node[dbsubnode, below=of fm] (lm) {LogManager\\flush LSN};
+
+    \draw[dbdown] (bm) -- (policy);
+    \draw[dbdown] (bm) -- (buffer);
+    \draw[dbdown] (bm) -- (fm);
+    \draw[dbdown] (buffer) -- (page);
+    \draw[dbarrow] (buffer) -- (block);
+    \draw[dbdown] (fm) -- (lm);
+  \end{tikzpicture}}
+  \caption{BufferManager、Buffer、Page、BlockID、FileManager 与 LogManager 的关系}
+  \label{fig:buffer-objects}
+\end{figure}
+
+当前 \codepath{BufferManagerInit} 可以接收外部替换策略；如果传入 \codepath{NULL}，它会创建默认 LRU 策略。测试 \codepath{BufferManagerBasicTest} 使用默认 LRU，但只验证稳定的缓冲池行为，不把 LRU 内部链表细节作为断言目标。
+
+\section{pin/unpin 机制}
+\label{sec:buffer-pin-unpin}
+
+\codepath{pin} 表示一个块正在被使用。调用 \apiname{BufferManagerPin} 时，系统会先查找该块是否已经在缓冲池中；如果已经存在，直接增加该 Buffer 的 pin 计数；如果不存在，就选择一个未 pin 的 Buffer，把它绑定到目标块并读入对应页。调用 \apiname{BufferManagerUnpin} 时，pin 计数减少；当 pin 计数降到 0，缓冲帧重新计入可用数量。
+
+图 \ref{fig:buffer-state} 展示了单个 Buffer 的状态转换。这里的 dirty 状态不是独立字段，而是由当前实现中的 \codepath{txNum >= 0} 表示。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.86\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=12mm and 20mm]
+    \node[dbnode] (free) {未绑定或未 pin\\pins = 0};
+    \node[dbnode, right=of free] (pinned) {正在使用\\pins > 0};
+    \node[dbnode, below=of pinned] (dirty) {已修改\\txNum >= 0};
+    \node[dbnode, left=of dirty] (flushed) {已写回\\txNum = -1};
+
+    \draw[dbarrow] (free) -- node[above,font=\footnotesize] {pin} (pinned);
+    \draw[dbarrow] (pinned) -- node[right,font=\footnotesize] {BufferSetModified} (dirty);
+    \draw[dbarrow] (dirty) -- node[below,font=\footnotesize] {BufferFlush / FlushAll} (flushed);
+    \draw[dbarrow] (pinned) to[bend left=18] node[above,font=\footnotesize] {unpin 到 0} (free);
+    \draw[dbarrow] (flushed) -- node[left,font=\footnotesize] {unpin 或复用} (free);
+  \end{tikzpicture}}
+  \caption{Buffer 状态转换图}
+  \label{fig:buffer-state}
+\end{figure}
+
+图 \ref{fig:buffer-pin-chain} 展示了 pin/unpin 的调用链。注意，\apiname{BufferManagerPin} 会在内部循环调用 \apiname{BufferManagerTryToPin}；如果暂时没有可用 Buffer，就等待，超过 \codepath{MAX_TIME} 后返回 \codepath{NULL}。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dbnode] (pin) {BufferManagerPin};
+    \node[dbnode, right=of pin] (try) {TryToPin};
+    \node[dbnode, right=of try] (find) {FindExistingBuffer};
+    \node[dbnode, below=of try] (choose) {ChooseUnPinnedBuffer};
+    \node[dbnode, right=of choose] (assign) {BufferAssignToBlock};
+    \node[dbnode, right=of assign] (bufpin) {BufferPin};
+    \node[dbnode, below=of assign] (unpin) {BufferManagerUnpin\\BufferUnPin};
+
+    \draw[dbarrow] (pin) -- (try);
+    \draw[dbarrow] (try) -- (find);
+    \draw[dbdown] (try) -- (choose);
+    \draw[dbarrow] (choose) -- (assign);
+    \draw[dbarrow] (assign) -- (bufpin);
+    \draw[dbdown] (bufpin) -- (unpin);
+  \end{tikzpicture}}
+  \caption{pin/unpin 调用链图}
+  \label{fig:buffer-pin-chain}
+\end{figure}
+
+\section{modified、dirty 与 flush 机制}
+\label{sec:buffer-dirty-flush}
+
+当前实现中，\apiname{BufferSetModified(buffer, txNum, lsn)} 会把 \codepath{txNum} 写入 Buffer；如果传入的 \codepath{lsn >= 0}，还会记录日志序号。随后 \apiname{BufferFlush} 会检查三个条件：Buffer 不为空、已经绑定到某个 \codepath{BlockID}、并且 \codepath{txNum >= 0}。只有满足这些条件时，Buffer 才会被认为需要写回。
+
+图 \ref{fig:buffer-flush} 展示了脏页 flush 与文件写回的关系。如果 Buffer 有合法 LSN，flush 会先请求 \codepath{LogManagerFlushLSN}；随后再调用 \codepath{FileManagerWrite} 把 \codepath{Page} 写回对应文件块。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dbnode] (modify) {PageSetInt/String\\修改 page};
+    \node[dbnode, right=of modify] (mark) {BufferSetModified\\txNum, lsn};
+    \node[dbnode, right=of mark] (flushall) {BufferManagerFlushAll(tx)};
+    \node[dbnode, below=of flushall] (flush) {BufferFlush};
+    \node[dbnode, left=of flush] (log) {LogManagerFlushLSN\\如果 lsn >= 0};
+    \node[dbnode, right=of flush] (file) {FileManagerWrite\\写回 block};
+
+    \draw[dbarrow] (modify) -- (mark);
+    \draw[dbarrow] (mark) -- (flushall);
+    \draw[dbdown] (flushall) -- (flush);
+    \draw[dbarrow] (flush) -- (log);
+    \draw[dbarrow] (flush) -- (file);
+  \end{tikzpicture}}
+  \caption{脏页 flush 与文件写回示意图}
+  \label{fig:buffer-flush}
+\end{figure}
+
+本章测试使用 \codepath{lsn = -1}，只验证 Buffer 修改后通过 \apiname{BufferManagerFlushAll} 写回文件；日志先行刷盘的约束会在事务与恢复章节结合真实事务流程再讨论。
 
 \section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+\label{sec:buffer-test}
 
-\section{实验内容}
-TODO
+本章新增并注册了配套测试文件：
+
+\begin{itemize}
+  \item \codepath{test/buffer/BufferManagerBasicTest.c}
+\end{itemize}
+
+该测试使用独立测试数据库目录，目录名带进程号和用例计数；数据文件为 \codepath{buffer_basic.tbl}，日志文件为 \codepath{buffer_basic.log}。测试使用 \codepath{FileManager}、\codepath{LogManager} 和默认 LRU 策略初始化 \codepath{BufferManager}。
+
+\begin{table}[htbp]
+  \centering
+  \caption{BufferManagerBasicTest 覆盖内容}
+  \label{tab:buffer-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_buffer\_manager\_pin\_and\_unpin\_updates\_available & pin 后可用 Buffer 数减少，unpin 到 0 后恢复。\\
+    test\_buffer\_manager\_repin\_existing\_block & 同一 BlockID 重复 pin 返回同一个 Buffer，并正确维护 pin 计数。\\
+    test\_buffer\_manager\_dirty\_flush\_writes\_page & 修改 Buffer 中的 Page，标记 modified，调用 FlushAll 后能从文件读回。\\
+    test\_buffer\_manager\_can\_reuse\_unpinned\_frame & 缓冲池满时，unpin 一个帧后可以复用它加载新块。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{关键代码讲解}
+\label{sec:buffer-code}
+
+第一段代码来自 \codepath{buffer/Buffer.c}。它说明单个 Buffer 在绑定新块前会先 flush 自己，随后复制目标 \codepath{BlockID} 并通过 \codepath{FileManagerRead} 读入页面。
+
+\begin{dbcode}{Buffer 绑定到文件块}
+void BufferAssignToBlock(Buffer *buffer, BlockID *blockId) {
+    BufferFlush(buffer);
+    buffer->blockId = BlockIDInit(blockId->fileName, blockId->BlockID);
+    FileManagerRead(buffer->fileManager, blockId, buffer->page);
+    buffer->pins = 0;
+}
+\end{dbcode}
+
+第二段代码来自 \codepath{buffer/BufferManager.c} 的 \apiname{BufferManagerTryToPin}。这个函数先复用已有缓存；如果块不在池中，就选择未 pin 的 Buffer，并把它分配给目标块。
+
+\begin{dbcode}{BufferManagerTryToPin 的核心逻辑}
+Buffer *BufferManagerTryToPin(BufferManager *bm, BlockID *blockId) {
+    Buffer *buffer = BufferManagerFindExistingBuffer(bm, blockId);
+    if (buffer != NULL) {
+        if (buffer->pins == 0)
+            bm->numAvailable--;
+        bm->policy->record_access(bm->policy->impl, buffer->frame_id);
+        BufferPin(buffer);
+        return buffer;
+    }
+
+    buffer = BufferManagerChooseUnPinnedBuffer(bm);
+
+    if (buffer == NULL) {
+        int fid = bm->policy->evict(bm->policy->impl);
+        if (fid < 0)
+            return NULL;
+
+        buffer = *(Buffer**)CVectorAt(bm->bufferPool, fid);
+        if (BufferIsPinned(buffer))
+            return NULL;
+    }
+
+    BufferAssignToBlock(buffer, blockId);
+    bm->numAvailable--;
+    bm->policy->record_access(bm->policy->impl, buffer->frame_id);
+    BufferPin(buffer);
+    return buffer;
+}
+\end{dbcode}
+
+第三段代码展示 unpin。只有从 pinned 状态降到 \codepath{pins == 0} 时，\codepath{numAvailable} 才增加；同时替换策略会移除这个 frame 的访问记录。
+
+\begin{dbcode}{BufferManagerUnpin}
+void BufferManagerUnpin(BufferManager *bm, Buffer *buffer) {
+    int wasPinned = BufferIsPinned(buffer);
+    BufferUnPin(buffer);
+
+    if (wasPinned && buffer->pins == 0) {
+        bm->numAvailable++;
+        bm->policy->remove(bm->policy->impl, buffer->frame_id);
+    }
+}
+\end{dbcode}
+
+第四段代码来自 \codepath{buffer/Buffer.c} 的 \apiname{BufferFlush}。它体现了本章所说的 dirty/flush 规则：只有已绑定块且 \codepath{txNum >= 0} 的 Buffer 才会真正写回。
+
+\begin{dbcode}{BufferFlush}
+void BufferFlush(Buffer *buffer) {
+    if (buffer == NULL)
+        return;
+
+    if (buffer->blockId == NULL)
+        return;
+    if (buffer->txNum < 0)
+        return;
+
+    if (buffer->lsn >= 0) {
+        LogManagerFlushLSN(buffer->logManager, buffer->lsn);
+    }
+
+    FileManagerWrite(buffer->fileManager, buffer->blockId, buffer->page);
+    buffer->txNum = -1;
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:buffer-run}
+
+在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建和测试：
+
+\begin{dbcode}[listing options={language=bash}]{构建并运行 Buffer 相关测试}
+cmake -S . -B build
+mingw32-make -C build -j8 SHELL=cmd.exe
+ctest --test-dir build --output-on-failure -R Buffer
+\end{dbcode}
+
+如果只想运行本章新增测试，可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{只运行 BufferManagerBasicTest}
+ctest --test-dir build --output-on-failure -R BufferManagerBasicTest
+\end{dbcode}
+
+观察测试输出时，可以重点看四件事：第一，pin 后 \codepath{numAvailable} 是否减少；第二，同一块重复 pin 是否仍然返回同一个 Buffer；第三，unpin 到 0 后 Buffer 是否重新变为可用；第四，修改页并调用 \codepath{BufferManagerFlushAll} 后，底层文件能否读回写入值。
 
 \section{思考题}
-TODO
+\label{sec:buffer-questions}
+
+\begin{enumerate}
+  \item 为什么数据库需要缓冲池，而不是每次访问记录都直接读写文件？
+  \item pin 计数为什么不能简单设计成布尔值？
+  \item 当前实现中 dirty 状态由 \codepath{txNum >= 0} 表示，这种设计有什么优点和局限？
+  \item flush 脏页前为什么可能需要先 flush 日志？
+\end{enumerate}
