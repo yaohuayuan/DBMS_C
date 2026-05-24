@@ -2,16 +2,271 @@
 \label{chap:metadata}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:metadata-purpose}
+
+本章用于理解 DBMS\_C 如何保存和读取“关于表的数据”。记录管理层已经能把字段和记录放进表文件，但数据库系统还需要知道有哪些表、每个表有哪些字段、视图定义放在哪里、索引登记在哪张目录表中。元数据管理层的任务就是维护这些系统目录，使上层模块可以通过表名、字段名、视图名和索引名重新找到结构信息。
+
+本章仍然遵循“先补真实 CTest，再写章节”的方式。本轮新增的 \codepath{MetadataBasicTest} 只验证元数据登记和读回能力：创建表后读回 Layout，创建视图后读回 view definition，创建索引后从 idxcat 读回 IndexInfo。不测试 SQL Parser，不测试查询计划选择索引，也不测试优化器代价模型。
+
+\section{模块作用}
+\label{sec:metadata-role}
+
+\codepath{metadata/} 位于记录管理和 SQL 执行层之间。它并不直接执行查询，而是提供系统目录访问能力。上层在执行 \codepath{CREATE TABLE}、\codepath{CREATE VIEW}、\codepath{CREATE INDEX} 时，需要把定义写入 catalog；后续查询、更新和计划生成阶段，再通过 MetadataManager 查回表布局、视图定义、索引信息和统计信息。
+
+当前实现中，\codepath{MetadataMgr} 是一个外观对象，内部持有 \codepath{TableManager}、\codepath{ViewManager}、\codepath{StatManager} 和 \codepath{IndexManager}。调用者通常不需要分别创建这些子管理器，而是通过 MetadataManager 的接口完成元数据创建与查询。
 
 \section{相关源码文件}
-TODO
+\label{sec:metadata-source-files}
+
+表 \ref{tab:metadata-source-files} 列出本章直接涉及的真实源码文件。建议先看 \codepath{MetadataManager.h}，了解对外接口；再看 \codepath{TableManager.c}，因为系统目录的核心表 \codepath{tblcat} 和 \codepath{fldcat} 都由它创建和读取；最后再看 View、Index 和 Stat 相关文件。
+
+\begin{table}[htbp]
+  \centering
+  \caption{Metadata 模块相关源码文件}
+  \label{tab:metadata-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    metadata/MetadataManager.h, metadata/MetadataManager.c & 封装表、视图、索引、统计信息管理器，对外提供统一元数据接口。\\
+    metadata/TableManager.h, metadata/TableManager.c & 创建和读取 tblcat、fldcat，并根据 catalog 恢复表 Layout。\\
+    metadata/ViewManager.h, metadata/ViewManager.c & 创建 viewcat，登记并读取视图定义字符串。\\
+    metadata/IndexManager.h, metadata/IndexManager.c & 创建 idxcat，登记索引名、表名和字段名，并返回 IndexInfo map。\\
+    metadata/IndexInfo.h, metadata/IndexInfo.c & 保存单个索引的字段、布局和统计信息，并提供估算接口。\\
+    metadata/StatManager.h, metadata/StatManager.c & 基于表扫描计算表的块数和记录数等简单统计信息。\\
+    metadata/StatInfo.h, metadata/StatInfo.c & 保存统计信息值，并提供访问函数。\\
+    record/Schema.h, record/Layout.h & 元数据读回后重新构造表字段集合和字段偏移。\\
+    tx/Transaction.h & catalog 表通过事务和 TableScan 写入底层表文件。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{MetadataManager 与子管理器}
+\label{sec:metadata-managers}
+
+图 \ref{fig:metadata-managers} 展示了 \codepath{MetadataMgr} 和各子管理器的关系。MetadataManager 本身不保存所有 catalog 记录，而是把不同类型的元数据操作分派给对应子管理器。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 13mm]
+    \node[dblevel] (md) {MetadataMgr\\统一元数据入口};
+    \node[dbnode, below left=of md] (tm) {TableManager\\tblcat / fldcat};
+    \node[dbnode, below=of md] (vm) {ViewManager\\viewcat};
+    \node[dbnode, below right=of md] (im) {IndexManager\\idxcat};
+    \node[dbnode, right=of im] (sm) {StatManager\\table stats};
+    \node[dbsubnode, below=of tm] (record) {TableScan + Layout};
+    \node[dbsubnode, below=of vm] (view) {view name + view def};
+    \node[dbsubnode, below=of im] (index) {index name + table + field};
+
+    \draw[dbdown] (md) -- (tm);
+    \draw[dbdown] (md) -- (vm);
+    \draw[dbdown] (md) -- (im);
+    \draw[dbarrow] (im) -- (sm);
+    \draw[dbdown] (tm) -- (record);
+    \draw[dbdown] (vm) -- (view);
+    \draw[dbdown] (im) -- (index);
+  \end{tikzpicture}}
+  \caption{MetadataMgr 与 Table/View/Index/Stat 子管理器的关系}
+  \label{fig:metadata-managers}
+\end{figure}
+
+初始化 MetadataManager 时，代码会按顺序创建 TableManager、ViewManager、StatManager 和 IndexManager。若当前数据库是新建的，TableManager 会先建立 \codepath{tblcat} 与 \codepath{fldcat}，ViewManager 会建立 \codepath{viewcat}，IndexManager 会建立 \codepath{idxcat}。这些 catalog 本质上仍然是普通表文件，只是由系统内部使用。
+
+\section{系统目录表}
+\label{sec:metadata-catalogs}
+
+当前实现中主要有四类系统目录表，如图 \ref{fig:metadata-catalogs} 所示。\codepath{tblcat} 记录表名和 slot 大小，\codepath{fldcat} 记录每个字段的类型、长度和 offset；这两张表合在一起可以恢复一张用户表的 Layout。\codepath{viewcat} 保存视图名和视图定义字符串，\codepath{idxcat} 保存索引名、表名和字段名。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.94\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dblevel] (cat) {System Catalogs};
+    \node[dbnode, below left=of cat] (tblcat) {tblcat\\tblname, slotsize};
+    \node[dbnode, below=of cat] (fldcat) {fldcat\\tblname, fldname, type, length, offset};
+    \node[dbnode, below right=of cat] (viewcat) {viewcat\\viewname, viewdef};
+    \node[dbnode, right=of viewcat] (idxcat) {idxcat\\indexname, tablename, fieldname};
+    \node[dbsubnode, below=of fldcat] (layout) {rebuild Layout};
+    \node[dbsubnode, below=of viewcat] (view) {read view definition};
+    \node[dbsubnode, below=of idxcat] (idx) {build IndexInfo map};
+
+    \draw[dbdown] (cat) -- (tblcat);
+    \draw[dbdown] (cat) -- (fldcat);
+    \draw[dbdown] (cat) -- (viewcat);
+    \draw[dbdown] (cat) -- (idxcat);
+    \draw[dbarrow] (tblcat) -- (layout);
+    \draw[dbdown] (fldcat) -- (layout);
+    \draw[dbdown] (viewcat) -- (view);
+    \draw[dbdown] (idxcat) -- (idx);
+  \end{tikzpicture}}
+  \caption{tblcat、fldcat、viewcat、idxcat 的系统目录关系}
+  \label{fig:metadata-catalogs}
+\end{figure}
+
+这些系统目录的一个重要特点是“用表管理表”。目录项不是写在特殊配置文件中，而是通过已有的 Schema、Layout、TableScan、Transaction 链路写入表文件。这种设计让元数据层可以复用记录管理和事务层能力。
+
+\section{CREATE TABLE 元数据登记过程}
+\label{sec:metadata-create-table}
+
+创建表时，MetadataManager 会把请求转发到 TableManager。TableManager 首先根据用户传入的 Schema 生成 Layout，然后向 \codepath{tblcat} 插入一条记录，保存表名和 slot size；接着遍历用户 Schema 中的每个字段，向 \codepath{fldcat} 插入字段记录，保存字段名、类型、长度和 offset。图 \ref{fig:metadata-create-table-flow} 展示了这条调用链。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dbnode] (md) {MetadataMgrCreateTable};
+    \node[dbnode, right=of md] (tm) {TableManagerCreateTable};
+    \node[dbnode, right=of tm] (layout) {LayoutInit(schema)};
+    \node[dbnode, below=of tm] (tblcat) {TableScan(tblcat)\\insert tblname, slotsize};
+    \node[dbnode, below=of layout] (fldcat) {TableScan(fldcat)\\insert field rows};
+    \node[dbsubnode, below=of fldcat] (fields) {fldname, type, length, offset};
+
+    \draw[dbarrow] (md) -- (tm);
+    \draw[dbarrow] (tm) -- (layout);
+    \draw[dbdown] (tm) -- (tblcat);
+    \draw[dbdown] (layout) -- (fldcat);
+    \draw[dbdown] (fldcat) -- (fields);
+  \end{tikzpicture}}
+  \caption{CREATE TABLE 元数据登记调用链}
+  \label{fig:metadata-create-table-flow}
+\end{figure}
+
+读取表布局时，\apiname{TableManagerGetLayout} 会反向扫描 catalog：先在 \codepath{tblcat} 中找到目标表的 slot size，再在 \codepath{fldcat} 中收集该表所有字段，重建 Schema 和 offset map，最后构造新的 Layout 返回给调用者。
 
 \section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+\label{sec:metadata-test}
 
-\section{实验内容}
-TODO
+本章新增并注册了配套测试文件：
+
+\begin{itemize}
+  \item \codepath{test/metadata/MetadataBasicTest.c}
+\end{itemize}
+
+该测试使用独立数据库目录，目录名包含进程号和用例计数；日志文件为 \codepath{metadata_basic.log}。测试结束时会尽量清理 \codepath{tblcat.tbl}、\codepath{fldcat.tbl}、\codepath{viewcat.tbl}、\codepath{idxcat.tbl} 以及本章创建的测试表文件。
+
+\begin{table}[htbp]
+  \centering
+  \caption{MetadataBasicTest 覆盖内容}
+  \label{tab:metadata-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_metadata\_manager\_create\_table\_and\_read\_layout & 初始化 MetadataMgr，创建 student\_meta 表，再通过 MetadataMgrGetLayout 读回 Schema、字段类型、长度和 offset。\\
+    test\_metadata\_manager\_create\_view\_and\_read\_definition & 创建 student\_view，并通过 MetadataMgrGetViewDef 读回相同 view definition。\\
+    test\_metadata\_manager\_create\_index\_and\_read\_index\_info & 创建 student\_idx\_meta 表和 idx\_student\_id 索引，再通过 MetadataManagerGetIndexInfo 验证 idxcat 登记结果。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+单独运行本章测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{运行 Metadata 相关测试}
+ctest --test-dir build --output-on-failure -R Metadata
+\end{dbcode}
+
+只运行本章新增测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{只运行 MetadataBasicTest}
+ctest --test-dir build --output-on-failure -R MetadataBasicTest
+\end{dbcode}
+
+\section{关键代码讲解}
+\label{sec:metadata-code}
+
+第一段代码来自 \codepath{metadata/MetadataManager.c} 的 \apiname{MetadataMgrInit}。它展示了 MetadataManager 如何组合四个子管理器。
+
+\begin{dbcode}{MetadataMgrInit 组合子管理器}
+MetadataMgr* MetadataMgrInit(bool isNew, Transaction *tx) {
+    MetadataMgr *mdMgr = (MetadataMgr*)malloc(sizeof(MetadataMgr));
+    mdMgr->tblMgr = TableManagerInit(isNew, tx);
+    mdMgr->viewMgr = ViewManagerInit(isNew, mdMgr->tblMgr, tx);
+    mdMgr->statMgr = StatManagerInit(mdMgr->tblMgr, tx);
+    mdMgr->idxMgr = IndexMgrInit(isNew, mdMgr->tblMgr, mdMgr->statMgr, tx);
+    return mdMgr;
+}
+\end{dbcode}
+
+第二段代码来自 \codepath{metadata/TableManager.c} 的 \apiname{TableManagerCreateTable}。它先把表级信息写入 \codepath{tblcat}，再把字段级信息逐行写入 \codepath{fldcat}。
+
+\begin{dbcode}{TableManagerCreateTable 写入 tblcat 与 fldcat}
+TableScan *table = TableScanInit(transaction, tblcatParam,
+                                 tableManager->tableCatalogLayout);
+Scan *tableCatalog = ScanInit(table, SCAN_TABLE_CODE);
+TableScanInsert(tableCatalog);
+TableScanSetString(tableCatalog, tblnameParam, tblname);
+TableScanSetInt(tableCatalog, slotsizeParam, layout->SlotSize);
+TableScanClose(tableCatalog);
+
+TableScan *field = TableScanInit(transaction, fldcatParam,
+                                 tableManager->fieldCatalogLayout);
+Scan *fieldCatalog = ScanInit(field, SCAN_TABLE_CODE);
+FieldNode *fieldNode = sch->fields;
+while(fieldNode){
+    CString *fldname = fieldNode->fileName;
+    TableScanInsert(fieldCatalog);
+    TableScanSetString(fieldCatalog, tblnameParam, tblname);
+    TableScanSetString(fieldCatalog, fldnameParam, fldname);
+    TableScanSetInt(fieldCatalog, typeParam, SchemaType(sch, fldname));
+    TableScanSetInt(fieldCatalog, lengthParam, SchemaLength(sch, fldname));
+    TableScanSetInt(fieldCatalog, offsetParam, LayoutOffset(layout, fldname));
+    fieldNode = fieldNode->next;
+}
+\end{dbcode}
+
+第三段代码来自 \codepath{metadata/ViewManager.c}。视图定义被作为普通字符串写入 \codepath{viewcat}，读取时按 view name 查找并复制定义字符串返回。
+
+\begin{dbcode}{ViewManagerCreateView 登记视图定义}
+Layout *layout = TableManagerGetLayout(viewManager->tableManager,
+                                       viewcatTbl, transaction);
+TableScan *scan = TableScanInit(transaction, viewcatTbl, layout);
+Scan *tableScan = ScanInit(scan, SCAN_TABLE_CODE);
+TableScanInsert(tableScan);
+TableScanSetString(tableScan, viewnameParam, vname);
+TableScanSetString(tableScan, viewdefParam, vdef);
+TableScanClose(tableScan);
+\end{dbcode}
+
+第四段代码来自 \codepath{metadata/IndexManager.c}。索引登记只保存索引名、表名和字段名；本章不测试 HashIndex 的数据结构，也不测试 Plan 是否选择索引。
+
+\begin{dbcode}{IndexMgrCreateIndex 写入 idxcat}
+TableScan *ts = TableScanInit(tx, idxcatTbl, indexMgr->layout);
+Scan *scan = ScanInit(ts, SCAN_TABLE_CODE);
+TableScanInsert(scan);
+TableScanSetString(scan, indexnameParam, idxname);
+TableScanSetString(scan, tablenameParam, tblname);
+TableScanSetString(scan, fieldnameParam, fldname);
+TableScanClose(scan);
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:metadata-run}
+
+在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建并运行测试：
+
+\begin{dbcode}[listing options={language=bash}]{构建并运行 Metadata 测试}
+cmake -S . -B build
+mingw32-make -C build -j8 SHELL=cmd.exe
+ctest --test-dir build --output-on-failure -R Metadata
+\end{dbcode}
+
+观察测试输出时，可以重点看五个点：
+
+\begin{enumerate}
+  \item \codepath{MetadataMgrInit(true, tx)} 是否创建四个子管理器。
+  \item 创建表后，\codepath{MetadataMgrGetLayout} 是否能读回字段类型、长度和 offset。
+  \item 视图定义是否能通过 \codepath{viewcat} 原样读回。
+  \item 索引登记是否能通过 \codepath{idxcat} 转换为 \codepath{IndexInfo}。
+  \item 本章测试是否只验证 catalog 行为，而没有提前进入 Parser、Plan 或查询优化。
+\end{enumerate}
 
 \section{思考题}
-TODO
+\label{sec:metadata-questions}
+
+\begin{enumerate}
+  \item 为什么数据库需要系统目录表，而不是只把 Schema 保存在内存结构中？
+  \item \codepath{tblcat} 和 \codepath{fldcat} 为什么要拆成两张目录表？
+  \item 当前 \codepath{viewcat} 只保存视图定义字符串，这种设计的优点和局限是什么？
+  \item \codepath{idxcat} 登记索引后，为什么还需要后续 Plan 章节来说明索引如何被使用？
+\end{enumerate}

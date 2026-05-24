@@ -285,6 +285,7 @@ if(HAVE_CMOCKA)
 
     # Metadata 模块测试
     add_cmocka_test(MetadataManagerTest ${TEST_DIR}/metadata/MetadataManagerTest.c)
+    add_cmocka_test(MetadataBasicTest ${TEST_DIR}/metadata/MetadataBasicTest.c)
 
     # Index 模块测试
     add_cmocka_test(HashIndexTest ${TEST_DIR}/index/HashIndexTest.c)
