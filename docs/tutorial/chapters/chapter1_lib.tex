@@ -1,0 +1,278 @@
+\chapter{基础组件与工具库实验}
+\label{chap:lib}
+
+\section{实验目的}
+\label{sec:lib-purpose}
+
+本章用于理解 DBMS\_C 为什么需要自定义基础组件。C 语言本身没有内建字符串对象、动态数组、链表、映射容器和统一字节缓冲区；如果每个上层模块都直接操作裸指针和裸数组，SQL 解析、记录布局、页式存储和元数据管理会很快变得难以阅读和验证。
+
+本章实验的目标是先确认 \codepath{Lib/} 中若干基础组件可以独立工作，再观察它们如何支撑上层 DBMS 模块。实验范围以当前真实 API 和已经跑通的 \codepath{test/Lib/LibBasicTest.c} 为准，不扩展未验证接口。
+
+\section{模块作用}
+\label{sec:lib-role}
+
+\codepath{Lib/} 为上层模块提供字符串、动态容器、字节缓冲和词法切分等基础能力。它不是一个独立数据库模块，而是许多数据库对象共同依赖的工具层：表名、字段名和文件名依赖字符串组件；字段列表、表列表和谓词项依赖容器组件；页内数据编码依赖字节缓冲组件；SQL 解析入口依赖词法切分组件。
+
+这些基础组件越稳定，上层模块越容易被单独测试。反过来说，如果基础组件存在内存泄漏、越界读写或比较规则错误，问题可能会在 Parser、Record、Metadata、Buffer 等更高层才表现出来，定位会更加困难。
+
+\section{相关源码文件}
+\label{sec:lib-source-files}
+
+表 \ref{tab:lib-source-files} 列出了本章展开的真实文件。这里的“展开”表示本章会描述其基本职责，并在配套测试中至少覆盖其中一部分稳定 API。
+
+\begin{table}[htbp]
+  \centering
+  \caption{本章涉及的 Lib 源码文件}
+  \label{tab:lib-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    Lib/CString.h, Lib/CString.c & 字符串创建、追加、获取内容、长度和比较。 \\
+    Lib/CVector.h, Lib/CVector.c & 按元素大小管理动态数组，支持插入、读取、查找和设置。 \\
+    Lib/CList.h, Lib/CList.c & 单链表容器，支持追加、按下标读取、contains、浅拷贝和深拷贝等行为。 \\
+    Lib/CMap.h, Lib/CMap.c & 基于红黑树包装的映射容器，本章只验证最小插入、查找和更新。 \\
+    Lib/map.h & 元数据等模块使用的宏式 map，本章只作为目录职责说明，不新增单独测试。 \\
+    Lib/ByteBuffer.h, Lib/ByteBuffer.c & 连续字节缓冲区，支持 int、long、bytes 等读写。 \\
+    Lib/StreamTokenizer.h, Lib/StreamTokenizer.c & SQL 文本的轻量 token 切分工具。 \\
+    Lib/Error.h, Lib/Error.c & 旧错误对象，当前已标记为 legacy/deprecated，本章只验证默认初始化。 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+本章不展开 \codepath{rwlock.h}、\codepath{BlockLockManager.c/.h}、\codepath{RBT} 和 \codepath{Trie}。其中，\codepath{RBT} 作为 \codepath{CMap} 的内部依赖出现，暂不作为独立实验目标；\codepath{Trie} 和其他工具文件后续只有在确认主链路用途和测试入口后再展开。
+
+\section{核心组件分类}
+\label{sec:lib-components}
+
+从实验角度看，\codepath{Lib/} 可以先按用途分为五类。表 \ref{tab:lib-components} 给出了本章的分类方式和对应观察点。
+
+\begin{table}[htbp]
+  \centering
+  \caption{Lib 组件分类表}
+  \label{tab:lib-components}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.22\textwidth} >{\ttfamily}p{0.28\textwidth} Y}
+    \toprule
+    分类 & 代表文件 & 观察点 \\
+    \midrule
+    字符串组件 & CString.h/.c & 是否能保存、追加和比较 SQL 文本中的名称。 \\
+    容器组件 & CVector.h/.c, CList.h/.c, CMap.h/.c & 是否能保存字段列表、表列表、谓词项和键值映射。 \\
+    字节缓冲组件 & ByteBuffer.h/.c & 是否能按小端方式把整数编码到连续字节区并读回。 \\
+    词法切分组件 & StreamTokenizer.h/.c & 是否能把 SQL 文本分成 WORD、NUMBER、STRING、DELIM 等 token。 \\
+    错误处理辅助组件 & Error.h/.c & 旧错误结构体是否能默认初始化；新代码优先使用 \codepath{error/DBError.h}。 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+这种分类不是源码目录的全部内容，而是本章实验的最小切入点。先确认这些组件独立可用，再阅读上层模块会更顺畅。
+
+\section{在 DBMS 主链路中的位置}
+\label{sec:lib-main-chain}
+
+图 \ref{fig:lib-support} 展示了 \codepath{Lib/} 对上层模块的支撑关系。图中不是函数调用顺序，而是“基础能力被谁使用”的关系。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.88\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 13mm]
+    \node[dblevel] (lib) {Lib 基础组件};
+    \node[dbnode, below left=of lib] (cstring) {CString\\名称与文本};
+    \node[dbnode, below=of lib] (containers) {CVector/CList/CMap\\列表与映射};
+    \node[dbnode, below right=of lib] (bytebuffer) {ByteBuffer\\二进制读写};
+    \node[dbnode, right=28mm of lib] (tokenizer) {StreamTokenizer\\Token 切分};
+
+    \node[dbsubnode, below=of cstring] (names) {表名、字段名、文件名};
+    \node[dbsubnode, below=of containers] (lists) {字段列表、表列表、谓词项};
+    \node[dbsubnode, below=of bytebuffer] (page) {Page 与页内编码};
+    \node[dbsubnode, below=of tokenizer] (parser) {Lexer/Parser};
+
+    \draw[dbarrow] (lib) -- (cstring);
+    \draw[dbarrow] (lib) -- (containers);
+    \draw[dbarrow] (lib) -- (bytebuffer);
+    \draw[dbarrow] (lib) -- (tokenizer);
+    \draw[dbdown] (cstring) -- (names);
+    \draw[dbdown] (containers) -- (lists);
+    \draw[dbdown] (bytebuffer) -- (page);
+    \draw[dbdown] (tokenizer) -- (parser);
+  \end{tikzpicture}}
+  \caption{Lib 支撑 DBMS 上层模块关系图}
+  \label{fig:lib-support}
+\end{figure}
+
+\codepath{CString} 支撑 SQL 文本、字段名、表名、文件名等字符串对象；\codepath{CVector}、\codepath{CList} 和 \codepath{CMap} 支撑字段列表、表列表、谓词项、元数据组织等结构；\codepath{ByteBuffer} 支撑页内字节读写和底层数据编码；\codepath{StreamTokenizer} 支撑 SQL 解析前的词法切分。
+
+图 \ref{fig:lib-bytebuffer-layout} 用一个简单的整数写入示意 ByteBuffer 的基本思想：写入整数时，缓冲区从当前 \codepath{position} 开始连续写入 4 个字节；\codepath{bufferFlip} 会把 \codepath{limit} 设为已经写入的位置，并把 \codepath{position} 归零，随后即可按相同布局读回。
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[x=1.05cm,y=0.85cm]
+    \foreach \i/\b in {0/0x40,1/0xE2,2/0x01,3/0x00,4/0,5/0,6/0,7/0} {
+      \node[draw=DBMSBorder, fill=DBMSBg, minimum width=1cm, minimum height=0.65cm, font=\footnotesize] at (\i,0) {\b};
+      \node[font=\scriptsize\color{DBMSGray}] at (\i,-0.55) {\i};
+    }
+    \draw[dbarrow] (0,0.75) -- node[above,font=\footnotesize] {bufferPutInt(123456)} (3,0.75);
+    \draw[dbdown] (0,-0.95) -- node[below,font=\footnotesize] {bufferFlip 后从 0 读回} (3,-0.95);
+  \end{tikzpicture}
+  \caption{ByteBuffer 字节布局示意图}
+  \label{fig:lib-bytebuffer-layout}
+\end{figure}
+
+图 \ref{fig:lib-tokenizer} 展示了 \codepath{StreamTokenizer} 对简单 SQL 片段的切分结果。它只负责把字符流分段，并记录 token 类型、起始位置、长度和整数值；更高层的语法含义仍由 Lexer/Parser 处理。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=4mm]
+    \node[dbsubnode] (t1) {select\\WORD};
+    \node[dbsubnode, right=of t1] (t2) {id\\WORD};
+    \node[dbsubnode, right=of t2] (t3) {from\\WORD};
+    \node[dbsubnode, right=of t3] (t4) {student\\WORD};
+    \node[dbsubnode, right=of t4] (t5) {=\\DELIM};
+    \node[dbsubnode, right=of t5] (t6) {1\\NUMBER};
+    \draw[dbarrow] (t1) -- (t2);
+    \draw[dbarrow] (t2) -- (t3);
+    \draw[dbarrow] (t3) -- (t4);
+    \draw[dbarrow] (t4) -- (t5);
+    \draw[dbarrow] (t5) -- (t6);
+  \end{tikzpicture}}
+  \caption{StreamTokenizer token 切分示意图}
+  \label{fig:lib-tokenizer}
+\end{figure}
+
+\section{配套测试}
+\label{sec:lib-test}
+
+本章新增并跑通的配套测试文件是：
+
+\begin{itemize}
+  \item \codepath{test/Lib/LibBasicTest.c}
+\end{itemize}
+
+测试名称为 \codepath{LibBasicTest}。它验证了以下最小行为：
+
+\begin{itemize}
+  \item \codepath{CString}：创建、追加、获取内容、长度和比较。
+  \item \codepath{CVector}：插入整数、读取元素、查询大小、查找和设置。
+  \item \codepath{CList}：追加、按下标读取、contains。
+  \item \codepath{CMap}：插入、查找、通过 \codepath{CMapPut} 更新。
+  \item \codepath{ByteBuffer}：写入 int、flip 后读回。
+  \item \codepath{StreamTokenizer}：对简单 SQL 文本切分 WORD、DELIM、NUMBER。
+  \item \codepath{Error}：旧错误对象默认初始化。
+\end{itemize}
+
+运行本章测试可以使用 CTest 的正则过滤：
+
+\begin{dbcode}[listing options={language=bash,numbers=none}]{运行 Lib 相关测试}
+ctest --test-dir build --output-on-failure -R Lib
+\end{dbcode}
+
+完整回归测试仍然使用：
+
+\begin{dbcode}[listing options={language=bash,numbers=none}]{运行完整测试}
+ctest --test-dir build --output-on-failure
+\end{dbcode}
+
+本轮新增测试后，完整 CTest 已从 13 个测试增加到 14 个测试，并通过 \codepath{14/14}。
+
+\section{关键代码讲解}
+\label{sec:lib-code}
+
+第一段代码来自 \codepath{Lib/CString.c} 的追加逻辑。它先计算追加后的长度，再确保容量足够，最后把新内容接到已有字符串尾部。
+
+\begin{dbcode}{CStringAppendCStr 的核心逻辑}
+void CStringAppendCStr(CString* cs, const char* str) {
+    if (!cs || !str) return;
+
+    size_t appendLen = strlen(str);
+    size_t newLen = cs->length + appendLen;
+
+    if (!ensureCapacity(cs, newLen + 1)) return;
+
+    strcat(cs->data + cs->length, str);
+    cs->length = newLen;
+}
+\end{dbcode}
+
+这段代码说明 \codepath{CString} 不只是保存一个 \codepath{char*}，还维护当前长度和容量。上层模块使用 \codepath{CStringGetPtr} 读取内容时，不需要关心扩容细节。
+
+第二段代码来自 \codepath{Lib/CVector.c} 的尾插逻辑。它根据元素大小计算目标地址，并根据是否提供 \codepath{Copy} 回调决定复制方式。
+
+\begin{dbcode}{CVectorPushBack 的核心逻辑}
+void CVectorPushBack(CVector *vec, const void *value) {
+    if (!vec || !value) {
+        return;
+    }
+
+    if (vec->size + 1 > vec->capacity && !CVectorGrow(vec, vec->size + 1)) {
+        return;
+    }
+
+    void *dest = (char *)vec->data + vec->size * vec->elem_size;
+    if (vec->Copy) {
+        vec->Copy(dest, value);
+    } else {
+        memcpy(dest, value, vec->elem_size);
+    }
+    vec->size++;
+}
+\end{dbcode}
+
+这段代码体现了 C 语言中泛型容器的常见做法：容器不知道元素类型，只知道元素大小和可选回调函数。
+
+第三段代码来自 \codepath{Lib/ByteBuffer.c}。写入整数时，代码按字节写入并移动 \codepath{position}；读出时按同样的字节布局恢复整数。
+
+\begin{dbcode}{ByteBuffer 写入 int 的核心逻辑}
+ByteBufferError bufferPutInt(ByteBuffer* buffer, int32_t data){
+    if (!buffer || !buffer->data) return BYTEBUFFER_ERROR_NULL;
+    if (buffer->position + 4 > buffer->limit) return BYTEBUFFER_ERROR_BOUNDS;
+    buffer->data[buffer->position++] = data & 255;
+    buffer->data[buffer->position++] = (data >> 8) & 255;
+    buffer->data[buffer->position++] = (data >> 16) & 255;
+    buffer->data[buffer->position++] = (data >> 24) & 255;
+    return BYTEBUFFER_OK;
+}
+\end{dbcode}
+
+这段代码和 File/Page 模块关系很近。后续学习页式存储时，会看到页内整数和字符串最终都需要落到字节数组中。
+
+第四段代码来自 \codepath{Lib/StreamTokenizer.c}。它识别由字母或下划线开头的 WORD token，并通过 \codepath{start} 和 \codepath{length} 描述 token 内容。
+
+\begin{dbcode}{StreamTokenizer 识别 WORD 的核心逻辑}
+if (isalpha((unsigned char)c) || c == '_') {
+    while (isalnum((unsigned char)*st->pos) || *st->pos == '_') st->pos++;
+    st->length = (int)(st->pos - st->start);
+    return (st->type = STT_WORD);
+}
+\end{dbcode}
+
+这说明 \codepath{StreamTokenizer} 只做轻量词法切分，不判断 \codepath{select}、\codepath{from}、\codepath{where} 的语法位置。语法规则会在更高层解析器中处理。
+
+\section{运行与观察}
+\label{sec:lib-run}
+
+本章建议先运行 Lib 相关测试：
+
+\begin{dbcode}[listing options={language=bash,numbers=none}]{观察 Lib 测试}
+ctest --test-dir build --output-on-failure -R Lib
+\end{dbcode}
+
+观察时重点关注四件事：
+
+\begin{itemize}
+  \item 基础组件是否能在不启动数据库主程序的情况下独立工作。
+  \item 字符串和容器是否能够支撑字段名、表名、列表和映射等上层数据结构。
+  \item \codepath{ByteBuffer} 是否能完成基本二进制写入、翻转和读回。
+  \item \codepath{StreamTokenizer} 是否能把 SQL 文本切成可供解析器继续处理的 token。
+\end{itemize}
+
+如果本章测试失败，应先看 \codepath{LibBasicTest} 的第一条失败信息，再回到对应头文件和实现文件确认真实 API 行为。
+
+\section{思考题}
+\label{sec:lib-questions}
+
+\begin{enumerate}
+  \item 为什么 C 语言项目需要自己封装 \codepath{CString} 和 \codepath{CVector}？
+  \item \codepath{ByteBuffer} 与后续 File/Page 模块之间是什么关系？
+  \item \codepath{StreamTokenizer} 为什么可以放在 \codepath{Lib/}，而不是直接写进 \codepath{parse/}？
+  \item 如果基础组件存在内存泄漏，会影响哪些上层模块？请结合表名、字段列表、页数据和 SQL 解析举例说明。
+\end{enumerate}

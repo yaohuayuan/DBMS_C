@@ -1,0 +1,41 @@
+\documentclass[UTF8,zihao=-4,openany]{ctexbook}
+
+\usepackage{styles/dbms_tutorial}
+
+\title{基于 C 语言的轻量化 DBMS 原型实验指导书}
+\author{DBMS\_C 教学实践材料}
+\date{\today}
+
+\begin{document}
+
+\frontmatter
+\maketitle
+
+\chapter*{使用说明}
+本指导书面向数据库课程实践、计算机专业低年级学生以及 DBMS\_C 项目阅读者。它围绕当前仓库中的真实 C 源码、测试入口、Trace 输出和图表组织实验内容，帮助读者逐步理解一个轻量化教学型 DBMS 原型的内部机制。
+
+本指导书不是毕业论文，也不是工业级数据库手册。后续章节将遵循“先补充或确认真实 CTest，再撰写章节正文”的方式逐章完善；本轮仅完整整理第0章，并为第1章到第12章保留统一占位结构。
+
+\tableofcontents
+
+\mainmatter
+\setcounter{chapter}{-1}
+\input{chapters/chapter0_intro}
+\input{chapters/chapter1_lib}
+\input{chapters/chapter2_file_page}
+\input{chapters/chapter3_log}
+\input{chapters/chapter4_buffer}
+\input{chapters/chapter5_tx_recovery}
+\input{chapters/chapter6_record}
+\input{chapters/chapter7_metadata}
+\input{chapters/chapter8_parse}
+\input{chapters/chapter9_plan_scan}
+\input{chapters/chapter10_update}
+\input{chapters/chapter11_trace_visualization}
+\input{chapters/chapter12_integration}
+
+\backmatter
+\chapter*{后续维护原则}
+后续扩展本指导书时，所有函数名、结构体名、目录路径、测试文件路径和运行结果都必须来自当前仓库的真实状态。若某一章尚未补充并通过对应测试，只能保留 TODO 或说明“后续补充”，不能写入未验证的测试结论。
+
+\end{document}

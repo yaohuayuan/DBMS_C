@@ -1,0 +1,300 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/dbms_tutorial}[2026/05/24 DBMS_C tutorial style]
+
+\RequirePackage[
+  a4paper,
+  top=2.5cm,
+  bottom=2.3cm,
+  left=2.6cm,
+  right=2.6cm,
+  headsep=0.55cm,
+  footskip=1.35cm
+]{geometry}
+\RequirePackage{fontspec}
+\RequirePackage{xeCJK}
+\RequirePackage{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{tabularx}
+\RequirePackage{longtable}
+\RequirePackage{array}
+\RequirePackage{enumitem}
+\RequirePackage{caption}
+\RequirePackage{listings}
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{tikz}
+\RequirePackage{hyperref}
+\RequirePackage{fancyhdr}
+\RequirePackage{setspace}
+\RequirePackage{needspace}
+\RequirePackage{etoolbox}
+\RequirePackage{chngcntr}
+
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc,backgrounds}
+\tcbuselibrary{listings,skins,breakable}
+
+% Fonts
+\IfFontExistsTF{Times New Roman}
+  {\setmainfont{Times New Roman}}
+  {\setmainfont{TeX Gyre Termes}}
+\IfFontExistsTF{Arial}
+  {\setsansfont{Arial}}
+  {\setsansfont{TeX Gyre Heros}}
+\IfFontExistsTF{Consolas}
+  {\setmonofont{Consolas}[Scale=MatchLowercase]}
+  {\IfFontExistsTF{Courier New}
+    {\setmonofont{Courier New}[Scale=MatchLowercase]}
+    {\setmonofont{Latin Modern Mono}[Scale=MatchLowercase]}}
+
+\IfFontExistsTF{SimSun}
+  {\setCJKmainfont[AutoFakeBold=2.5]{SimSun}}
+  {\IfFontExistsTF{Noto Serif CJK SC}
+    {\setCJKmainfont[AutoFakeBold=2.5]{Noto Serif CJK SC}}
+    {\IfFontExistsTF{Source Han Serif SC}
+      {\setCJKmainfont[AutoFakeBold=2.5]{Source Han Serif SC}}
+      {\setCJKmainfont[AutoFakeBold=2.5]{FandolSong}}}}
+\IfFontExistsTF{SimHei}
+  {\setCJKsansfont[AutoFakeBold=2.5]{SimHei}}
+  {\IfFontExistsTF{Microsoft YaHei}
+    {\setCJKsansfont[AutoFakeBold=2.5]{Microsoft YaHei}}
+    {\IfFontExistsTF{Noto Sans CJK SC}
+      {\setCJKsansfont[AutoFakeBold=2.5]{Noto Sans CJK SC}}
+      {\setCJKsansfont[AutoFakeBold=2.5]{FandolHei}}}}
+
+% Colors
+\definecolor{DBMSMain}{HTML}{2F5D7E}
+\definecolor{DBMSMainDark}{HTML}{24495F}
+\definecolor{DBMSLight}{HTML}{DCE8F2}
+\definecolor{DBMSBg}{HTML}{F7F9FB}
+\definecolor{DBMSBorder}{HTML}{8FA6B8}
+\definecolor{DBMSText}{HTML}{2B2B2B}
+\definecolor{DBMSGray}{HTML}{6B7280}
+\definecolor{DBMSCodeBg}{HTML}{F8FAFC}
+\definecolor{DBMSKeyword}{HTML}{244B65}
+\definecolor{DBMSComment}{HTML}{557A63}
+\definecolor{DBMSString}{HTML}{5A6F8C}
+\definecolor{DBMSAccent}{HTML}{5E7F96}
+
+\newcommand{\dbmsheadingfont}{\sffamily\bfseries}
+\newcommand{\dbmsheaderfont}{\zihao{-5}\color{DBMSGray}}
+\newcommand{\codepath}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\apiname}[1]{\texttt{\detokenize{#1}}}
+
+% Page and paragraph settings
+\color{DBMSText}
+\setstretch{1.28}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0pt plus 0.3pt}
+\raggedbottom
+\sloppy
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=DBMSMain,
+  citecolor=DBMSMain,
+  urlcolor=DBMSMain,
+  pdfborder={0 0 0}
+}
+
+% Chapter and section style
+\ctexset{
+  chapter = {
+    format = \dbmsheadingfont\zihao{3}\color{DBMSMain},
+    name = {第,章},
+    number = \arabic{chapter},
+    aftername = \quad,
+    beforeskip = 14pt,
+    afterskip = 12pt,
+    pagestyle = plain
+  },
+  section = {
+    format = \dbmsheadingfont\zihao{4}\color{DBMSMain},
+    aftername = \quad,
+    beforeskip = 1.1ex plus .2ex,
+    afterskip = .65ex plus .1ex
+  },
+  subsection = {
+    format = \dbmsheadingfont\zihao{-4}\color{DBMSText},
+    aftername = \quad,
+    beforeskip = .85ex plus .15ex,
+    afterskip = .45ex plus .1ex
+  }
+}
+\pretocmd{\chapter}{\Needspace{6\baselineskip}}{}{}
+\pretocmd{\section}{\Needspace{3\baselineskip}}{}{}
+
+% Header and footer
+\pagestyle{fancy}
+\setlength{\headheight}{25pt}
+\fancyhf{}
+\fancyhead[L]{\dbmsheaderfont 基于 C 语言的轻量化 DBMS 原型实验指导书}
+\fancyhead[R]{\dbmsheaderfont\nouppercase{\leftmark}}
+\fancyfoot[C]{\dbmsheaderfont\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{DBMSBorder}\leaders\hrule height \headrulewidth\hfill}}
+\fancypagestyle{plain}{
+  \fancyhf{}
+  \fancyfoot[C]{\dbmsheaderfont\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
+
+% Captions and numbering
+\counterwithin{figure}{chapter}
+\counterwithin{table}{chapter}
+\renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+\renewcommand{\thetable}{\thechapter-\arabic{table}}
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+\captionsetup{
+  font=small,
+  labelfont={bf,color=DBMSMain},
+  labelsep=quad,
+  skip=6pt
+}
+\captionsetup[table]{position=top,skip=5pt}
+\captionsetup[figure]{position=bottom,skip=6pt}
+
+% Lists and tables
+\setlist[itemize]{leftmargin=2em,itemsep=0.18em,topsep=0.35em,parsep=0pt}
+\setlist[enumerate]{leftmargin=2.3em,itemsep=0.18em,topsep=0.35em,parsep=0pt}
+\renewcommand{\arraystretch}{1.16}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\AtBeginEnvironment{table}{\small}
+\AtBeginEnvironment{longtable}{\small}
+
+% Code blocks
+\lstdefinestyle{dbmsc}{
+  language=C,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{DBMSKeyword}\bfseries,
+  commentstyle=\color{DBMSComment},
+  stringstyle=\color{DBMSString},
+  numbers=left,
+  numberstyle=\tiny\color{DBMSGray},
+  stepnumber=1,
+  numbersep=8pt,
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=4,
+  upquote=true
+}
+\lstset{style=dbmsc}
+
+\newtcblisting[
+  auto counter,
+  number within=chapter,
+  number freestyle={\noexpand\thechapter-\noexpand\arabic{\tcbcounter}}
+]{dbcode}[2][]{
+  enhanced jigsaw,
+  breakable,
+  listing only,
+  sharp corners,
+  boxrule=0.45pt,
+  colback=DBMSCodeBg,
+  colframe=DBMSBorder,
+  coltitle=DBMSText,
+  fonttitle=\dbmsheadingfont\small,
+  attach boxed title to top left={xshift=0mm,yshift=-0.2mm},
+  boxed title style={
+    sharp corners,
+    boxrule=0pt,
+    colback=DBMSLight,
+    left=6pt,
+    right=6pt,
+    top=2pt,
+    bottom=2pt
+  },
+  top=7pt,
+  bottom=7pt,
+  left=4pt,
+  right=4pt,
+  before skip=0.8\baselineskip,
+  after skip=0.8\baselineskip,
+  listing options={style=dbmsc},
+  title={代码~\thetcbcounter\quad #2},
+  #1
+}
+
+\newtcolorbox[
+  auto counter,
+  number within=chapter,
+  number freestyle={\noexpand\thechapter-\noexpand\arabic{\tcbcounter}}
+]{dbalgorithm}[2][]{
+  enhanced,
+  breakable,
+  sharp corners,
+  colback=DBMSBg,
+  colframe=DBMSLight,
+  coltitle=DBMSText,
+  fonttitle=\dbmsheadingfont\small,
+  title={算法~\thetcbcounter\quad #2},
+  boxrule=0.5pt,
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  before skip=0.8\baselineskip,
+  after skip=0.8\baselineskip,
+  #1
+}
+
+% TikZ styles
+\tikzset{
+  dblevel/.style={
+    draw=DBMSMain,
+    fill=DBMSLight,
+    rounded corners=2pt,
+    minimum height=8mm,
+    text width=36mm,
+    align=center,
+    font=\small\dbmsheadingfont,
+    inner sep=4pt
+  },
+  dbnode/.style={
+    draw=DBMSBorder,
+    fill=DBMSBg,
+    rounded corners=2pt,
+    minimum height=8mm,
+    text width=35mm,
+    align=center,
+    font=\small,
+    inner sep=4pt
+  },
+  dbsubnode/.style={
+    draw=DBMSBorder,
+    fill=white,
+    rounded corners=2pt,
+    minimum height=6mm,
+    text width=32mm,
+    align=center,
+    font=\footnotesize,
+    inner sep=3pt
+  },
+  dbgroup/.style={
+    draw=DBMSBorder,
+    fill=DBMSBg,
+    rounded corners=3pt,
+    inner sep=6pt
+  },
+  dbline/.style={draw=DBMSBorder,line width=0.6pt},
+  dbdashline/.style={draw=DBMSBorder,dashed,line width=0.6pt},
+  dbarrow/.style={-{Stealth[length=2.2mm]},draw=DBMSMain,line width=0.7pt},
+  dbdown/.style={-{Stealth[length=2.2mm]},draw=DBMSAccent,line width=0.8pt}
+}
+
+\makeatletter
+\renewcommand{\maketitle}{
+  \begin{titlepage}
+    \centering
+    \vspace*{2.4cm}
+    {\dbmsheadingfont\zihao{1}\color{DBMSMain}\@title\par}
+    \vspace{1.1cm}
+    {\Large\color{DBMSGray}\@author\par}
+    \vfill
+    {\large\color{DBMSGray}\@date\par}
+  \end{titlepage}
+}
+\makeatother

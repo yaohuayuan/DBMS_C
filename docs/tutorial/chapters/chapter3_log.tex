@@ -1,0 +1,306 @@
+\chapter{日志管理实验}
+\label{chap:log}
+
+\section{实验目的}
+\label{sec:log-purpose}
+
+本章用于理解 DBMS\_C 如何通过 \codepath{LogManager} 组织日志记录，为后续事务提交、回滚和恢复机制提供基础。日志管理层并不直接解释事务语义，也不执行恢复算法；它的职责是把一条条日志记录追加到日志文件中，在需要时刷盘，并提供从后向前读取日志记录的基础能力。
+
+本章实验只覆盖 \codepath{Log/LogManager.h} 和 \codepath{Log/LogManager.c} 中已经存在的真实接口：初始化日志管理器、追加日志记录、flush 日志页、通过 \codepath{LogIterator} 读取日志记录，以及重新打开后读回已经刷盘的日志内容。
+
+\section{模块作用}
+\label{sec:log-role}
+
+\codepath{LogManager} 位于文件层之上、事务恢复层之下。它依赖 \codepath{FileManager} 完成日志文件的块级读写，依赖 \codepath{Page} 表示内存中的日志页，依赖 \codepath{BlockID} 标识当前日志块。上层事务和恢复模块可以把“写一条日志”“确保某个 LSN 已经刷盘”“从后向前扫描日志”交给这一层完成。
+
+本章不展开 \codepath{tx/recovery/RecoveryManager.c} 和具体日志记录类型。恢复算法会在第5章事务、并发与恢复实验中再讨论；本章只把日志追加、日志页组织和日志读取基础讲清楚。
+
+\section{相关源码文件}
+\label{sec:log-source-files}
+
+表 \ref{tab:log-source-files} 列出本章直接或间接涉及的真实源码文件。可以看到，日志管理本身代码量不大，但它建立在第2章文件页式存储之上。
+
+\begin{table}[htbp]
+  \centering
+  \caption{LogManager 相关源码文件}
+  \label{tab:log-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    Log/LogManager.h & 声明 \codepath{LogManager}、\codepath{LogIterator} 以及 append、flush、迭代读取接口。\\
+    Log/LogManager.c & 实现日志页初始化、日志记录追加、LSN 更新、刷盘和逆序读取。\\
+    File/FileManager.h & 提供日志文件的块级读写、长度查询和追加新块能力。\\
+    File/Page.h & 提供日志页内 int 和原始字节读写接口。\\
+    File/BlockID.h & 标识当前日志文件中的具体块号。\\
+    Lib/ByteBuffer.h & \codepath{LogIteratorNext} 返回日志 payload 时使用的字节缓冲对象。\\
+    Lib/CString.h & 表示日志文件名和测试数据库目录名。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+阅读时建议先看 \codepath{LogManagerInit} 如何拿到当前日志块，再看 \codepath{LogManagerAppend} 如何在页内写入记录，最后看 \codepath{LogIteratorNext} 为什么能从后写入的记录开始读取。
+
+\section{核心对象职责}
+\label{sec:log-objects}
+
+图 \ref{fig:log-objects} 展示了日志管理层的核心对象关系。\codepath{LogManager} 是中心对象，但它并不直接操作磁盘字节，而是通过 \codepath{FileManager}、\codepath{Page} 和 \codepath{BlockID} 协作完成。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=11mm and 16mm]
+    \node[dblevel] (lm) {LogManager\\追加、刷盘、维护 LSN};
+    \node[dbnode, below left=of lm] (page) {Page\\当前日志页};
+    \node[dbnode, below=of lm] (block) {BlockID\\当前日志块};
+    \node[dbnode, below right=of lm] (fm) {FileManager\\日志文件块读写};
+    \node[dbsubnode, below=of page] (layout) {boundary + records};
+    \node[dbsubnode, below=of block] (target) {test\_logfile.log:N};
+    \node[dbsubnode, below=of fm] (disk) {append/read/write};
+
+    \draw[dbdown] (lm) -- (page);
+    \draw[dbdown] (lm) -- (block);
+    \draw[dbdown] (lm) -- (fm);
+    \draw[dbdown] (page) -- (layout);
+    \draw[dbdown] (block) -- (target);
+    \draw[dbdown] (fm) -- (disk);
+  \end{tikzpicture}}
+  \caption{LogManager、FileManager、Page 与 BlockID 的关系}
+  \label{fig:log-objects}
+\end{figure}
+
+\codepath{LogManager} 维护当前日志文件名、当前日志页、当前日志块、最新 \codepath{latestLSN} 和最近刷盘的 \codepath{LastSavedLSN}。\codepath{FileManager} 负责实际日志文件的块级读写；\codepath{Page} 是日志页在内存中的表示；\codepath{BlockID} 指向日志文件中的一个块。当前实现中存在 LSN：每次 \apiname{LogManagerAppend} 会递增 \codepath{latestLSN}，\apiname{LogManagerFlush} 会把 \codepath{LastSavedLSN} 更新到最新 LSN。
+
+\section{日志页与日志记录组织}
+\label{sec:log-page-layout}
+
+DBMS\_C 的日志不是把记录随意散落写入文件，而是通过日志页组织。当前日志页的 0 号偏移处保存一个 \codepath{boundary}，表示本页有效日志记录的起始位置。新日志记录从页尾向前写入：先计算 \codepath{recordSize}，再把位置设为 \codepath{boundary - recordSize}，最后更新页首的 \codepath{boundary}。
+
+图 \ref{fig:log-page-layout} 描述了这种布局。越新的记录越靠近页前部的 boundary，因此迭代器从 boundary 开始向后移动时，会先读到后写入的记录。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.88\textwidth}{!}{%
+  \begin{tikzpicture}[x=1cm,y=0.8cm]
+    \node[draw=DBMSBorder, fill=DBMSLight, minimum width=1.5cm, minimum height=0.7cm, font=\footnotesize] at (0,0) {boundary};
+    \node[draw=DBMSBorder, fill=white, minimum width=2.2cm, minimum height=0.7cm, font=\footnotesize] at (2.05,0) {空闲空间};
+    \node[draw=DBMSMain, fill=DBMSBg, minimum width=2.1cm, minimum height=0.7cm, font=\footnotesize] at (4.2,0) {record 3};
+    \node[draw=DBMSMain, fill=DBMSBg, minimum width=2.1cm, minimum height=0.7cm, font=\footnotesize] at (6.3,0) {record 2};
+    \node[draw=DBMSMain, fill=DBMSBg, minimum width=2.1cm, minimum height=0.7cm, font=\footnotesize] at (8.4,0) {record 1};
+    \node[font=\scriptsize\color{DBMSGray}] at (0,-0.65) {offset 0};
+    \node[font=\scriptsize\color{DBMSGray}] at (4.2,-0.65) {boundary 指向最新记录};
+    \node[font=\scriptsize\color{DBMSGray}] at (8.4,-0.65) {页尾};
+    \draw[dbarrow] (8.4,0.7) -- node[above,font=\footnotesize] {append 从页尾向前增长} (4.2,0.7);
+    \draw[dbdown] (4.2,-0.95) -- node[below,font=\footnotesize] {iterator 从 boundary 开始读取} (8.4,-0.95);
+  \end{tikzpicture}}
+  \caption{日志页内记录布局示意}
+  \label{fig:log-page-layout}
+\end{figure}
+
+每条日志记录由一个内部头部和一段 payload 组成。内部头部在 \codepath{LogManager.c} 中定义为 \codepath{LogRecordHeader}，包含记录总长度和 LSN。payload 的具体含义由上层事务或恢复模块决定，本章测试只把它当作普通字节串。
+
+当当前页空间不足时，\apiname{LogManagerAppend} 会先 flush 当前页，再通过 \apiname{LogManagerAppendNewBlock} 追加一个新的日志块。flush 的作用是把当前日志页写回日志文件，并记录已经保存到磁盘的 LSN。
+
+\section{配套测试}
+\label{sec:log-test}
+
+本章新增并注册了配套测试文件：
+
+\begin{itemize}
+  \item \codepath{test/Log/LogManagerBasicTest.c}
+\end{itemize}
+
+该测试使用 CMocka，测试名为 \codepath{LogManagerBasicTest}。测试使用独立测试数据库目录和独立日志文件名 \codepath{test_logfile.log}，目录名带进程号和用例计数，避免污染真实数据库文件或与重复运行的测试相互影响。
+
+\begin{table}[htbp]
+  \centering
+  \caption{LogManagerBasicTest 覆盖内容}
+  \label{tab:log-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_log\_manager\_append\_and\_flush & 追加一条日志后 LSN 递增，flush 后 \codepath{LastSavedLSN} 更新，日志文件包含一个块。\\
+    test\_log\_manager\_iterate\_records\_reverse\_order & 连续追加三条文本 payload 后，迭代器按 third、second、first 的顺序读出。\\
+    test\_log\_manager\_persists\_after\_reopen & flush 后销毁并重新打开 \codepath{FileManager} 和 \codepath{LogManager}，仍能读回已经保存的日志。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+本章也保留已有 \codepath{test/Log/LogTest.c}，但章节讲解以新增的最小测试为主，因为它只聚焦 LogManager 的基本追加、刷盘和读取能力。
+
+\section{关键代码讲解}
+\label{sec:log-code}
+
+第一段代码来自 \codepath{Log/LogManager.c} 的 \apiname{LogManagerInit}。初始化时，日志管理器会创建一个与文件块大小一致的 \codepath{Page}。如果日志文件还没有块，就追加一个新块；如果已经存在日志块，就读取最后一个日志块作为当前块。
+
+\begin{dbcode}{LogManager 初始化}
+LogManager *LogManagerInit(FileManager*fileManager,CString *str){
+    LogManager *logManager = malloc(sizeof (LogManager));
+    logManager->fileManager = fileManager;
+    logManager->logFile = CStringCreateFromCString(str);
+    logManager->logPage = PageInit(logManager->fileManager->blockSize);
+    logManager->LastSavedLSN = 0;
+    logManager->latestLSN = 0;
+    int logSize = FileManagerLength(fileManager,str);
+    if(logSize==0){
+        logManager->currentBlockId = LogManagerAppendNewBlock(logManager);
+    }else{
+        logManager->currentBlockId = BlockIDInit(logManager->logFile,logSize-1);
+        FileManagerRead(logManager->fileManager,logManager->currentBlockId,logManager->logPage);
+        int boundary = PageGetInt(logManager->logPage, 0);
+        if (boundary < logManager->fileManager->blockSize) {
+            LogRecordHeader header;
+            PageGetBytesRaw(logManager->logPage, boundary, (uint8_t*)&header, sizeof(header));
+            logManager->latestLSN = header.lsn;
+        }
+    }
+    return logManager;
+}
+\end{dbcode}
+
+第二段代码展示了日志追加逻辑。这里的关键点是：日志记录不是从页头顺序写入，而是从页尾向前写入；页首位置 0 保存新的 boundary。
+
+\begin{dbcode}{LogManagerAppend 的核心逻辑}
+int LogManagerAppend(LogManager* lm,const uint8_t* payload,uint32_t payloadSize) {
+    uint32_t recordSize = sizeof(LogRecordHeader) + payloadSize;
+    int boundary = PageGetInt(lm->logPage, 0);
+    if (boundary < recordSize + sizeof(int)) {
+        LogManagerFlush(lm);
+        lm->currentBlockId = LogManagerAppendNewBlock(lm);
+        boundary = PageGetInt(lm->logPage, 0);
+    }
+    int pos = boundary - recordSize;
+    LogRecordHeader header = {
+        .length = recordSize,
+        .lsn = ++lm->latestLSN
+    };
+    PageSetBytesRaw(lm->logPage, pos,
+                    (uint8_t*)&header, sizeof(header));
+    PageSetBytesRaw(lm->logPage,
+                    pos + sizeof(header),
+                    payload, payloadSize);
+    PageSetInt(lm->logPage, 0, pos);
+    return header.lsn;
+}
+\end{dbcode}
+
+第三段代码展示了 flush。当前实现中，\apiname{LogManagerFlush} 会把当前页写回当前块，并把最近保存 LSN 更新为最新 LSN；\apiname{LogManagerFlushLSN} 则允许上层请求至少刷到某个 LSN。
+
+\begin{dbcode}{日志刷盘}
+void LogManagerFlush(LogManager*logManager){
+    FileManagerWrite(logManager->fileManager,logManager->currentBlockId,logManager->logPage);
+    logManager->LastSavedLSN = logManager->latestLSN;
+}
+
+void LogManagerFlushLSN(LogManager * logManager,int lsn){
+    if (lsn >= logManager->LastSavedLSN) {
+        FileManagerWrite(logManager->fileManager,logManager->currentBlockId,logManager->logPage);
+        logManager->LastSavedLSN = lsn;
+    }
+}
+\end{dbcode}
+
+第四段代码展示了迭代读取。因为 append 把最新记录放在更靠前的位置，迭代器从 boundary 开始向页尾移动时，会自然读出逆序日志。
+
+\begin{dbcode}{LogIterator 读取下一条日志}
+ByteBuffer* LogIteratorNext(LogIterator* it) {
+    if (it->currentPos == it->fm->blockSize) {
+        it->blockId->BlockID--;
+        LogIteratorMoveToBlock(it);
+    }
+
+    LogRecordHeader header;
+    PageGetBytesRaw(it->page,
+                    it->currentPos,
+                    (uint8_t*)&header,
+                    sizeof(LogRecordHeader));
+
+    uint32_t payloadSize =
+        header.length - sizeof(LogRecordHeader);
+
+    uint8_t* payload = malloc(payloadSize);
+
+    PageGetBytesRaw(it->page,
+        it->currentPos + sizeof(LogRecordHeader),
+        payload,
+        payloadSize);
+
+    it->currentPos += header.length;
+
+    return bufferInitByteSize(payloadSize, payload);
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:log-run}
+
+在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建和测试：
+
+\begin{dbcode}[listing options={language=bash}]{构建并运行 Log 相关测试}
+cmake -S . -B build
+mingw32-make -C build -j8 SHELL=cmd.exe
+ctest --test-dir build --output-on-failure -R Log
+\end{dbcode}
+
+如果只想运行本章新增测试，可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{只运行 LogManagerBasicTest}
+ctest --test-dir build --output-on-failure -R LogManagerBasicTest
+\end{dbcode}
+
+图 \ref{fig:log-append-flush} 概括了追加与刷盘的调用链。上层传入一段 payload，\codepath{LogManager} 加上内部 header 后写入当前日志页；flush 时再把整个页交给 \codepath{FileManagerWrite} 写入日志文件块。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 12mm]
+    \node[dbnode] (payload) {payload bytes};
+    \node[dbnode, right=of payload] (append) {LogManagerAppend};
+    \node[dbnode, right=of append] (page) {logPage\\header + payload};
+    \node[dbnode, right=of page] (flush) {LogManagerFlush};
+    \node[dbnode, right=of flush] (file) {FileManagerWrite\\test\_logfile.log};
+
+    \draw[dbarrow] (payload) -- (append);
+    \draw[dbarrow] (append) -- node[above,font=\footnotesize] {更新 boundary/LSN} (page);
+    \draw[dbarrow] (page) -- (flush);
+    \draw[dbarrow] (flush) -- (file);
+  \end{tikzpicture}}
+  \caption{append + flush 调用链}
+  \label{fig:log-append-flush}
+\end{figure}
+
+图 \ref{fig:log-reverse-iterator} 展示了本章测试验证的逆序读取行为。测试依次写入 \codepath{first}、\codepath{second}、\codepath{third}，迭代器读出的顺序是 \codepath{third}、\codepath{second}、\codepath{first}。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.86\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=7mm and 10mm]
+    \node[dbnode] (w1) {append first};
+    \node[dbnode, right=of w1] (w2) {append second};
+    \node[dbnode, right=of w2] (w3) {append third};
+    \node[dbsubnode, below=of w2, text width=58mm] (page) {页内布局：boundary -> third -> second -> first};
+    \node[dbnode, below=of page] (iter) {LogIteratorNext};
+    \node[dbsubnode, below=of iter, text width=58mm] (out) {读取顺序：third, second, first};
+
+    \draw[dbarrow] (w1) -- (w2);
+    \draw[dbarrow] (w2) -- (w3);
+    \draw[dbdown] (w2) -- (page);
+    \draw[dbdown] (page) -- (iter);
+    \draw[dbdown] (iter) -- (out);
+  \end{tikzpicture}}
+  \caption{日志逆序读取示意}
+  \label{fig:log-reverse-iterator}
+\end{figure}
+
+运行本章实验时，建议重点观察：日志记录是否能被追加；flush 后 \codepath{LastSavedLSN} 是否更新；多条日志记录的读取顺序是否符合当前实现；重新打开后是否能读回已刷盘记录；以及 \codepath{LogManager} 如何依赖第2章的 \codepath{FileManager} 和 \codepath{Page}。
+
+\section{思考题}
+\label{sec:log-questions}
+
+\begin{enumerate}
+  \item 为什么数据库需要日志，而不是只修改数据页？
+  \item 为什么日志通常适合顺序追加，而不是频繁在文件中间修改？
+  \item flush 日志和写回数据页之间可能有什么先后约束？
+  \item 为什么回滚或恢复过程经常需要从后向前扫描日志？
+\end{enumerate}

@@ -1,0 +1,231 @@
+\chapter{引言与环境准备}
+\label{chap:intro}
+
+本章用于建立阅读 DBMS\_C 的共同起点。读者在进入具体模块实验之前，需要先知道本项目的教学定位、源码目录如何组织、如何稳定构建和测试，以及后续章节为什么要采用“先测试、再写实验内容”的组织方式。
+
+\section{编写目的}
+\label{sec:intro-purpose}
+
+本指导书面向计算机专业低年级学生、数据库课程实践和 DBMS\_C 项目阅读者。它的目标不是让读者一次性掌握所有数据库实现细节，而是通过“源码阅读 + 测试运行 + Trace 观察 + 图表理解”的方式，逐步理解一个轻量化 DBMS 原型从 SQL 输入到文件存储访问的大致过程。
+
+后续各章会围绕真实源码展开：先确认或补充可运行的测试，再把测试目标、运行命令、预期现象、观察点和对应源码位置写入章节正文。这样做的好处是，实验内容不只停留在文字说明，而是可以被当前工程实际验证。
+
+\section{项目定位}
+\label{sec:intro-positioning}
+
+DBMS\_C 是一个基于 C 语言实现的轻量化教学型 DBMS 原型，已经包含 SQL 解析、查询计划、扫描执行、记录管理、元数据管理、事务日志、缓冲区管理、文件页式存储等模块。它强调“可运行、可观察、可阅读”，适合作为数据库系统课程中的实验材料和源码阅读对象。
+
+需要注意的是，本项目不是完整工业级数据库系统。它不会覆盖工业数据库中的全部 SQL 标准、优化器规则、并发事务隔离级别、存储引擎能力和高性能工程化细节。本指导书也不是论文式说明文档，而是配套 DBMS\_C 源码的实验指导书。
+
+\section{学习主线}
+\label{sec:intro-learning-path}
+
+阅读 DBMS\_C 时，可以沿着从用户输入向底层存储逐步下沉的方向理解系统。图 \ref{fig:intro-learning-path} 不是完整函数调用图，而是一张学习路线图：上层更接近 SQL 和用户观察结果，下层更接近数据页、文件和事务支撑。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=6mm and 12mm]
+    \node[dblevel] (sql) {SQL 输入\\\codepath{main.c}};
+    \node[dbnode, below=of sql] (parse) {SQL 解析\\\codepath{parse/}};
+    \node[dbnode, below=of parse] (plan) {查询计划\\\codepath{plan/}};
+    \node[dbnode, below=of plan] (scan) {Scan 扫描执行\\\codepath{query/}};
+    \node[dbnode, below=of scan] (record) {记录访问\\\codepath{record/}};
+    \node[dbnode, below left=8mm and 10mm of record] (metadata) {元数据支撑\\\codepath{metadata/}};
+    \node[dbnode, below=of record] (tx) {事务与日志\\\codepath{tx/} + \codepath{Log/}};
+    \node[dbnode, below=of tx] (buffer) {缓冲区管理\\\codepath{buffer/}};
+    \node[dblevel, below=of buffer] (file) {文件与页式存储\\\codepath{File/}};
+    \node[dbsubnode, right=22mm of plan] (trace) {Trace 可视化观察\\\codepath{trace/}};
+
+    \draw[dbdown] (sql) -- (parse);
+    \draw[dbdown] (parse) -- (plan);
+    \draw[dbdown] (plan) -- (scan);
+    \draw[dbdown] (scan) -- (record);
+    \draw[dbdown] (record) -- (tx);
+    \draw[dbdown] (tx) -- (buffer);
+    \draw[dbdown] (buffer) -- (file);
+    \draw[dbarrow] (metadata) -- (record);
+    \draw[dbarrow] (parse.east) -- ++(10mm,0) |- (trace.west);
+    \draw[dbarrow] (plan.east) -- (trace.west);
+    \draw[dbarrow] (scan.east) -- ++(10mm,0) |- (trace.west);
+
+    \begin{scope}[on background layer]
+      \node[dbgroup, fit=(sql)(parse)(plan)(scan)(record)(tx)(buffer)(file), label={[font=\small\color{DBMSGray}]left:层次下沉}] {};
+    \end{scope}
+  \end{tikzpicture}}
+  \caption{DBMS\_C 学习主线图}
+  \label{fig:intro-learning-path}
+\end{figure}
+
+图 \ref{fig:intro-learning-path} 中，各层的作用可以这样理解：SQL 输入层负责接收用户命令；SQL 解析层把文本转换为内部数据对象；查询计划层决定如何组合表扫描、选择和投影；Scan 扫描执行层以统一接口向上提供记录；记录访问层负责表记录的定位与读写；元数据层保存表结构、视图和索引相关信息；事务与日志层为更新和恢复提供支撑；缓冲区层管理内存中的页；文件与页式存储层最终负责磁盘文件和页面读写。Trace 模式不改变执行语义，只帮助读者观察这些阶段的大致过程。
+
+\section{项目目录概览}
+\label{sec:intro-directories}
+
+DBMS\_C 的目录不是按论文章节划分，而是按数据库执行链路和模块职责组织。表 \ref{tab:intro-directories} 根据当前仓库中的真实目录整理，便于读者在后续实验中快速定位源码。
+
+\begin{table}[htbp]
+  \centering
+  \caption{DBMS\_C 项目目录职责表}
+  \label{tab:intro-directories}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    目录或文件 & 主要职责 \\
+    \midrule
+    Lib/ & 基础工具库，包括字符串、字节缓冲、列表、映射、向量、分词辅助等通用组件。 \\
+    File/ & 文件块、页对象和文件管理，是理解页式存储的入口。 \\
+    Log/ & 日志管理相关实现，为事务提交、回滚和恢复提供基础。 \\
+    buffer/ & 缓冲区管理和 LRU 替换策略，负责内存页与磁盘页之间的协调。 \\
+    tx/ & 事务、并发控制、恢复管理以及事务持有的缓冲区列表。 \\
+    record/ & Schema、Layout、RID、RecordPage、TableScan 等记录层结构。 \\
+    metadata/ & 表、字段、视图、索引和统计信息等元数据管理。 \\
+    parse/ & Lexer、Parser 以及各类 SQL 命令的数据对象。 \\
+    plan/ & 查询计划和更新计划的构造入口。 \\
+    query/ & Scan 接口、表达式、谓词、选择、投影和笛卡尔积扫描等执行层对象。 \\
+    index/ & 当前仓库中的哈希索引相关实现。 \\
+    DBMS/ & SimpleDB 初始化入口，连接文件、日志、缓冲区、元数据和规划器。 \\
+    main.c & CLI 入口，负责读取命令、分发 SQL、执行事务命令和输出结果。 \\
+    test/ & 基于 CMocka 的已有测试文件。 \\
+    docs/ & 说明文档、Trace 文档和本实验指导书。 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+推荐阅读顺序是：\codepath{Lib/} → \codepath{File/} → \codepath{Log/} → \codepath{buffer/} → \codepath{tx/} → \codepath{record/} → \codepath{metadata/} → \codepath{parse/} → \codepath{plan/} 与 \codepath{query/} → 更新执行 → Trace → 综合实验。这个顺序先建立底层对象概念，再理解上层 SQL 如何使用这些能力。
+
+\section{环境准备}
+\label{sec:intro-environment}
+
+本指导书默认在 Windows 环境下进行实验。当前项目的稳定构建方式依赖 CMake、MinGW 编译器和 \codepath{mingw32-make}。编译本指导书本身还需要 XeLaTeX。
+
+建议准备以下环境：
+
+\begin{itemize}
+  \item Windows 操作系统；
+  \item MinGW 或等价的 GCC 工具链，并确保 \codepath{mingw32-make} 可用；
+  \item CMake；
+  \item XeLaTeX，用于编译本指导书；
+  \item 可选编辑器：VS Code、CLion、Trae 或 Codex。
+\end{itemize}
+
+如果不同机器上的工具链路径不同，应优先保证命令行中能直接执行 \codepath{cmake}、\codepath{mingw32-make} 和 \codepath{xelatex}。后续章节不会假定某一个 IDE 的专有功能。
+
+\section{构建项目}
+\label{sec:intro-build}
+
+当前 Windows/Codex 环境下，DBMS\_C 已验证的稳定构建命令如表 \ref{tab:intro-build-test-commands} 所示。请先进入项目根目录，再进行配置和编译。
+
+\begin{table}[htbp]
+  \centering
+  \caption{构建与测试命令表}
+  \label{tab:intro-build-test-commands}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    命令 & 作用 \\
+    \midrule
+    cd D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS\_C & 进入 DBMS\_C 项目目录。 \\
+    cmake -S . -B build & 根据当前 \codepath{CMakeLists.txt} 配置构建目录。 \\
+    mingw32-make -C build -j8 SHELL=cmd.exe & 使用 \codepath{mingw32-make} 编译项目，并显式覆盖 Makefile 中的 shell。 \\
+    ctest --test-dir build --output-on-failure & 运行已注册测试，并在失败时输出详细信息。 \\
+    bin\textbackslash NewDBMS.exe & 启动交互式 DBMS 程序。 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{dbcode}[listing options={language=bash,numbers=none}]{稳定构建命令}
+cd D:\code\DBMS\NewDBMS\DBMS_C
+cmake -S . -B build
+mingw32-make -C build -j8 SHELL=cmd.exe
+\end{dbcode}
+
+这里使用 \codepath{mingw32-make -C build -j8 SHELL=cmd.exe}，是因为当前构建目录在 Windows 下使用 Makefile 时，默认 shell 可能指向 \codepath{/bin/sh}。在 Codex/Trae 这类环境中，调用 Git/MSYS 的 shell 曾经触发过构建阶段问题。因此，本指导书把 \codepath{mingw32-make} 并覆盖 \codepath{SHELL=cmd.exe} 作为当前稳定主命令，不把 \codepath{cmake --build build} 作为默认主命令。
+
+\section{运行测试与测试驱动的实验组织方式}
+\label{sec:intro-test-driven}
+
+项目测试通过 CTest 统一运行：
+
+\begin{dbcode}[listing options={language=bash,numbers=none}]{运行已有测试}
+ctest --test-dir build --output-on-failure
+\end{dbcode}
+
+\codepath{ctest} 用于确认已有模块测试是否通过。后续每章新增或调整测试后，都要重新运行完整 CTest，确保没有破坏已有测试。如果新增测试，测试数量可能增加；如果测试失败，应优先查看第一条真实失败信息，而不是同时修改多个无关位置。
+
+从第1章开始，本指导书采用测试驱动的实验组织方式：
+
+\begin{enumerate}
+  \item 每个模块实验在正式撰写章节前，先补充或确认一个真实可运行的测试。
+  \item 测试必须基于当前仓库真实 API，不能编造不存在的函数、结构体或路径。
+  \item 测试通过后，章节中再写入测试文件路径、测试目标、运行命令、预期结果、观察点和对应源码位置。
+  \item 文档中不能写不存在或没有跑通的测试。
+  \item 如果某章暂时没有测试，就只能写“后续补充”，不能伪造测试结果。
+  \item 每新增一个测试后都要运行完整 CTest。
+  \item 第0章本身不新增模块测试，只记录当前工程的基线构建与测试方法。
+\end{enumerate}
+
+表 \ref{tab:intro-chapter-test-strategy} 给出后续章节与测试策略的对应关系。当前状态均为 TODO，表示需要在后续轮次中先处理测试，再完善章节正文。
+
+\begin{table}[htbp]
+  \centering
+  \caption{后续章节与测试策略对照表}
+  \label{tab:intro-chapter-test-strategy}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.25\textwidth} Y}
+    \toprule
+    章节 & 测试策略 \\
+    \midrule
+    第1章 基础组件与工具库实验 & TODO：先补充或确认 Lib 相关 CTest，再撰写章节内容。 \\
+    第2章 文件与页式存储实验 & TODO：先补充或确认 File/Page 相关 CTest，再撰写章节内容。 \\
+    第3章 日志管理实验 & TODO：先补充或确认 Log 相关 CTest，再撰写章节内容。 \\
+    第4章 缓冲区管理实验 & TODO：先补充或确认 buffer 相关 CTest，再撰写章节内容。 \\
+    第5章 事务、并发与恢复实验 & TODO：先补充或确认 tx/recovery 相关 CTest，再撰写章节内容。 \\
+    第6章 记录管理实验 & TODO：先补充或确认 record 相关 CTest，再撰写章节内容。 \\
+    第7章 元数据管理实验 & TODO：先补充或确认 metadata 相关 CTest，再撰写章节内容。 \\
+    第8章 SQL 解析实验 & TODO：先补充或确认 parse 相关 CTest，再撰写章节内容。 \\
+    第9章 查询计划与扫描执行实验 & TODO：先补充或确认 plan/query 相关 CTest，再撰写章节内容。 \\
+    第10章 更新执行实验 & TODO：先补充或确认更新执行相关 CTest，再撰写章节内容。 \\
+    第11章 SQL 执行过程 Trace 可视化实验 & TODO：先确认 Trace 行为和可观察示例，再撰写章节内容。 \\
+    第12章 综合实验 & TODO：在前序实验稳定后设计综合测试和综合任务。 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{运行系统}
+\label{sec:intro-run-system}
+
+构建完成后，主程序位于项目根目录下的 \codepath{bin/NewDBMS.exe}。在 Windows PowerShell 中可以这样启动：
+
+\begin{dbcode}[listing options={language=bash,numbers=none}]{启动 DBMS\_C}
+cd D:\code\DBMS\NewDBMS\DBMS_C
+bin\NewDBMS.exe
+\end{dbcode}
+
+程序启动后会进入交互式 SQL 提示符。读者可以输入 SQL 语句并以分号结束，也可以输入 \codepath{commit}、\codepath{rollback}、\codepath{trace on}、\codepath{trace off}、\codepath{exit} 等元命令。输入 \codepath{exit} 会退出系统；按当前程序逻辑，退出阶段会提交当前事务。因此，如果 Trace 已开启，读者可能在关闭数据库时看到一段退出阶段的 \codepath{COMMIT} Trace。
+
+\section{Trace 模式说明}
+\label{sec:intro-trace}
+
+Trace 模式用于观察 SQL 在 DBMS\_C 内部的大致执行过程，包括解析、计划、扫描、更新、事务和输出等阶段。它的定位是 CLI 教学可视化，不是 GUI，也不改变普通 SQL 执行语义。
+
+当前仓库中已经有 \codepath{docs/trace_mode.md}，用于记录 Trace 模式的开启方式、示例 SQL 和当前限制。本指导书第11章会进一步围绕 Trace 设计实验；第0章只要求读者知道 Trace 是一种观察执行链路的辅助工具。
+
+\section{如何阅读本指导书}
+\label{sec:intro-how-to-read}
+
+建议按以下方式使用本指导书：
+
+\begin{enumerate}
+  \item 先阅读每章实验目的，明确本章要理解的问题。
+  \item 再查看相关源码文件，确认结构体、函数和目录都来自真实仓库。
+  \item 再运行本章配套测试，观察测试是否通过以及输出是否符合预期。
+  \item 对照图、表、代码和 Trace 输出理解执行链路。
+  \item 最后完成思考题，把模块放回 DBMS 的整体执行路径中理解。
+\end{enumerate}
+
+如果某章暂时只有 TODO，占位内容表示该章还没有完成“先测试、再写章节”的准备工作。不要把 TODO 当成已完成实验，也不要根据 TODO 推断源码中已经存在某个未验证接口。
+
+\section{本章小结}
+\label{sec:intro-summary}
+
+本章完成了指导书的起步准备：明确了 DBMS\_C 的教学型原型定位，给出了从 SQL 输入向底层存储下沉的学习主线，整理了真实项目目录职责，说明了 Windows 环境下稳定构建、测试和运行系统的方法，并规定了后续章节采用测试驱动的实验组织方式。
+
+从下一章开始，每一章都应先围绕对应模块补充或确认真实可运行的 CTest，再把测试入口、源码位置和观察结果写入章节正文。下一步建议从第1章基础组件与工具库实验开始。

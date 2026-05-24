@@ -1,0 +1,313 @@
+\chapter{文件与页式存储实验}
+\label{chap:file-page}
+
+\section{实验目的}
+\label{sec:file-page-purpose}
+
+本章用于理解 DBMS\_C 如何把上层记录访问落实到底层文件块和内存页。数据库表、日志和记录并不是直接以“对象”的形式写入磁盘，而是最终落到固定大小的文件块上；程序运行时，又需要把这些文件块读入内存中的页缓冲区，再按整数、字符串或原始字节进行解释。
+
+本章实验只关注 \codepath{File/} 目录中的最小闭环：\codepath{BlockID} 标识一个文件块，\codepath{Page} 管理内存页内容，\codepath{FileManager} 负责把页写入文件块或从文件块读回页。配套测试已经注册为 \codepath{FileManagerBasicTest}，并通过完整 CTest 验证。
+
+\section{模块作用}
+\label{sec:file-page-role}
+
+\codepath{File/} 为上层 \codepath{buffer/}、\codepath{record/}、\codepath{Log/} 等模块提供块级文件访问能力。它不理解表结构、字段类型或事务语义，只负责三个基础问题：目标块在哪里、页内字节如何读写、内存页如何和本地文件块交换数据。
+
+这种分层让上层模块可以把“读第几个块”“写一页数据”“追加一个新块”作为稳定接口使用，而不必在每个模块里重复处理文件路径、偏移量、\codepath{fread}、\codepath{fwrite} 和块大小计算。
+
+\section{相关源码文件}
+\label{sec:file-page-source-files}
+
+表 \ref{tab:file-page-source-files} 列出本章展开的真实源码文件。DBMS\_C 当前没有在 \codepath{File/} 中定义单独的全局 \codepath{BLOCK_SIZE} 常量，块大小由 \codepath{FileManagerInit(dbDirectoryName, blockSize)} 传入，页大小由 \codepath{PageInit(size)} 传入；本章测试使用 \codepath{TEST_BLOCK_SIZE 400} 保持二者一致。
+
+\begin{table}[htbp]
+  \centering
+  \caption{File/Page 相关源码文件}
+  \label{tab:file-page-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    File/BlockID.h & 声明文件名和块号组成的块标识结构及访问函数。\\
+    File/BlockID.c & 实现 \apiname{BlockIDInit}、\apiname{BlockIDEqual}、\apiname{BlockID2CString} 等块标识操作。\\
+    File/Page.h & 声明页对象以及 int、short、long、string、bytes 的页内读写接口。\\
+    File/Page.c & 基于 \codepath{ByteBuffer} 实现页内偏移读写和字符串长度前缀编码。\\
+    File/FileManager.h & 声明文件管理器结构和 read、write、length、append 等块级操作。\\
+    File/FileManager.c & 负责数据库目录创建、文件句柄缓存、按块偏移读写和追加空块。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+从阅读顺序上，建议先看 \codepath{BlockID.h/.c}，理解“文件名 + 块号”如何定位块；再看 \codepath{Page.h/.c}，理解页内数据布局；最后看 \codepath{FileManager.h/.c}，把页和磁盘文件联系起来。
+
+\section{核心对象职责}
+\label{sec:file-page-objects}
+
+图 \ref{fig:file-page-objects} 展示了三个核心对象之间的关系。它们不是并列工具，而是一条从“定位”到“内存表示”再到“文件读写”的小链路。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.88\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=12mm and 18mm]
+    \node[dblevel] (blockid) {BlockID\\文件名 + 块号};
+    \node[dblevel, right=of blockid] (page) {Page\\内存页缓冲};
+    \node[dblevel, right=of page] (fm) {FileManager\\块级文件访问};
+
+    \node[dbsubnode, below=of blockid] (target) {确定目标文件块\\fileName, blockId};
+    \node[dbsubnode, below=of page] (buffer) {保存 page bytes\\读写 int/string};
+    \node[dbsubnode, below=of fm] (disk) {按 blockSize 计算偏移\\read/write/append};
+
+    \draw[dbarrow] (blockid) -- node[above,font=\footnotesize] {定位} (fm);
+    \draw[dbarrow] (page) -- node[above,font=\footnotesize] {交换数据} (fm);
+    \draw[dbdown] (blockid) -- (target);
+    \draw[dbdown] (page) -- (buffer);
+    \draw[dbdown] (fm) -- (disk);
+  \end{tikzpicture}}
+  \caption{BlockID、Page 与 FileManager 的职责关系}
+  \label{fig:file-page-objects}
+\end{figure}
+
+\codepath{BlockID} 保存文件名和块号，用于回答“这次读写的是哪个文件的第几个块”。\codepath{Page} 是内存中的页级字节缓冲，对上提供 \apiname{PageSetInt}、\apiname{PageGetInt}、\apiname{PageSetString}、\apiname{PageGetString} 等接口。\codepath{FileManager} 保存数据库目录名、块大小和文件句柄缓存，负责把 \codepath{Page} 中的字节写到指定 \codepath{BlockID}，或把指定块读回到另一个 \codepath{Page}。
+
+\section{文件块与内存页的关系}
+\label{sec:file-page-mapping}
+
+数据库底层通常按块或页读写文件。DBMS\_C 中，文件块是磁盘文件上的一段连续字节，\codepath{Page} 是内存中的同样大小的字节缓冲。二者的大小必须在一次读写中保持一致，否则页内偏移和文件块偏移就无法对应。
+
+图 \ref{fig:file-page-mapping} 展示了第 $n$ 个文件块与一个内存 \codepath{Page} 的对应关系。实际读写时，\codepath{FileManager} 使用 \codepath{blockSize * blockId} 计算文件偏移，再用 \codepath{fread} 或 \codepath{fwrite} 交换整页数据。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[x=1cm,y=0.9cm]
+    \node[dbnode, text width=34mm] (page) at (0,1.7) {内存 Page\\buffer->data};
+    \foreach \i in {0,1,2,3,4} {
+      \node[draw=DBMSBorder, fill=DBMSBg, minimum width=1cm, minimum height=0.65cm, font=\scriptsize] at (-2+\i,0.65) {byte};
+    }
+    \node[font=\footnotesize\color{DBMSGray}] at (0,-0.05) {大小为 blockSize 的连续缓冲区};
+
+    \node[dbnode, text width=34mm] (file) at (7,1.7) {本地文件\\page\_roundtrip.tbl};
+    \foreach \i/\name in {0/block 0,1/block 1,2/block 2} {
+      \node[draw=DBMSBorder, fill=DBMSBg, minimum width=2.1cm, minimum height=0.7cm, font=\footnotesize] at (5.1+\i*2.1,0.65) {\name};
+    }
+    \draw[dbarrow] (page) -- node[above,font=\footnotesize] {FileManagerWrite} (file);
+    \draw[dbarrow] (file) -- node[below,font=\footnotesize] {FileManagerRead} (page);
+    \node[font=\footnotesize\color{DBMSGray}] at (7,-0.05) {文件偏移 = blockSize * blockId};
+  \end{tikzpicture}}
+  \caption{文件块与内存 Page 的对应关系}
+  \label{fig:file-page-mapping}
+\end{figure}
+
+上层记录和日志最终都依赖这一层完成持久化：记录模块负责解释页内槽位和字段，日志模块负责组织日志记录，而 \codepath{FileManager} 只负责把已经组织好的页字节写入对应文件块。
+
+\section{配套测试}
+\label{sec:file-page-test}
+
+本章新增并注册了配套测试文件：
+
+\begin{itemize}
+  \item \codepath{test/File/FileManagerBasicTest.c}
+\end{itemize}
+
+该测试使用 CMocka，测试名为 \codepath{FileManagerBasicTest}。它覆盖以下最小行为：
+
+\begin{table}[htbp]
+  \centering
+  \caption{FileManagerBasicTest 覆盖内容}
+  \label{tab:file-page-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_page\_write\_read\_int & \apiname{PageSetInt} 写入整数后，\apiname{PageGetInt} 能按相同偏移读回。\\
+    test\_page\_write\_read\_string & \apiname{PageSetString} 写入字符串后，\apiname{PageGetString} 能读回相同内容。\\
+    test\_block\_id\_create\_compare\_and\_string & \codepath{BlockID} 能保存文件名和块号，并支持比较和字符串化。\\
+    test\_file\_manager\_write\_and\_read\_block & 一个 \codepath{Page} 写入块后，另一个 \codepath{Page} 能从同一块读回 int 和 string。\\
+    test\_file\_manager\_append\_block & \apiname{FileManagerAppend} 能追加块，并让文件长度随块数增长。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+测试使用独立测试数据库目录，并在写读块和追加块用例中按进程号生成目录名，避免重复运行 CTest 时被上一次 Windows 文件句柄释放时机影响。测试会尝试在用例前后清理测试目录；如果 Windows 暂时保留目录句柄，后续测试也不会复用同名目录。
+
+\section{关键代码讲解}
+\label{sec:file-page-code}
+
+代码 \ref{code:file-page-blockid} 来自 \codepath{File/BlockID.c}。可以看到，\codepath{BlockID} 并不保存文件句柄，只保存文件名副本和块号。比较两个块是否相同，也必须同时比较块号和文件名。
+
+\begin{dbcode}{BlockID 创建与比较}
+BlockID *BlockIDInit(CString *name, int id){
+    if (!name)
+        return NULL;
+    BlockID *b = (BlockID *)malloc(sizeof(BlockID));
+    b->fileName = CStringCreateFromCString(name);
+    b->BlockID = id;
+    return b;
+}
+
+bool BlockIDEqual(BlockID *b1, BlockID *b2){
+    return BlockIDGetBlockID(b1) == BlockIDGetBlockID(b2)
+    && CStringEqual(BlockIDGetFileName(b1),BlockIDGetFileName(b2));
+}
+\end{dbcode}
+\label{code:file-page-blockid}
+
+代码 \ref{code:file-page-page} 来自 \codepath{File/Page.c}。\codepath{Page} 本身把实际字节操作交给 \codepath{ByteBuffer}；字符串写入时先写长度，再写字符内容，读回时按照同样布局恢复 \codepath{CString}。
+
+\begin{dbcode}{Page 中 int 与 string 的读写}
+int PageGetInt(Page *p, int position) {
+    int output;
+    bufferGetIntPosition(p->buffer, position, &output);
+    return output;
+}
+
+void PageSetInt(Page *p, int position, int data) {
+    bufferPutIntPosition(p->buffer, position, data);
+}
+
+CString *PageGetString(Page *p, int position) {
+    p->buffer->position = position;
+    int length = 0;
+    bufferGetInt(p->buffer, &length);
+    if (length < 0) {
+        return NULL;
+    }
+    char *str = (char*)malloc(length + 1);
+    bufferGetBytesPosition(p->buffer, position + sizeof(int32_t), str, length);
+    str[length] = '\0';
+    CString *cString = CStringCreateFromCStr(str);
+    return cString;
+}
+
+void PageSetString(Page *p, int position, const CString *cs) {
+    int length = (int)cs->length;
+    p->buffer->position = position;
+    bufferPutInt(p->buffer, length);
+    bufferPutBytes(p->buffer, (uint8_t*)cs->data, length);
+}
+\end{dbcode}
+\label{code:file-page-page}
+
+代码 \ref{code:file-page-filemanager} 来自 \codepath{File/FileManager.c}。\codepath{FileManagerRead} 和 \codepath{FileManagerWrite} 的核心都是先通过 \codepath{BlockID} 找到文件，再根据块号计算偏移。读不存在的块时，当前实现会把目标 \codepath{Page} 填 0，这让上层可以得到一个空页。
+
+\begin{dbcode}{FileManager 按块读写}
+void FileManagerRead(FileManager *fm, BlockID *blockId, Page *page) {
+    FILE *f = FileManagerGetFile(fm, blockId->fileName);
+    if (f == NULL) {
+        perror("File not found");
+        return;
+    }
+    long target_offset = (long)fm->blockSize * BlockIDGetBlockID(blockId);
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    if (target_offset >= file_size) {
+        memset(page->buffer->data, 0, fm->blockSize);
+        return;
+    }
+
+    fseek(f, fm->blockSize * BlockIDGetBlockID(blockId), SEEK_SET);
+    size_t bytesRead = fread(page->buffer->data, 1, fm->blockSize, f);
+    if (bytesRead < fm->blockSize) {
+        memset(page->buffer->data + bytesRead, 0,
+               fm->blockSize - bytesRead);
+    }
+}
+
+void FileManagerWrite(FileManager *fm, BlockID *blockId, Page *page) {
+    FILE *f = FileManagerGetFile(fm, blockId->fileName);
+    if (f == NULL) {
+        perror("File not found");
+        return;
+    }
+    fseek(f, fm->blockSize * BlockIDGetBlockID(blockId), SEEK_SET);
+    size_t bytesRead = fwrite(page->buffer->data, 1, fm->blockSize, f);
+    if (bytesRead != fm->blockSize) {
+        perror("Error! . Failed to read the complete block");
+    }
+    fflush(f);
+}
+\end{dbcode}
+\label{code:file-page-filemanager}
+
+代码 \ref{code:file-page-append} 展示了追加块的关键逻辑。它先用 \apiname{FileManagerLength} 得到新块号，再写入一个全 0 缓冲区，从而扩展文件长度。
+
+\begin{dbcode}{FileManager 追加新块}
+int FileManagerLength(FileManager *fm, CString *filename) {
+    FILE *f = FileManagerGetFile(fm, filename);
+    fseek(f, 0, SEEK_END);
+    return (int)(ftell(f) / fm->blockSize);
+}
+
+BlockID *FileManagerAppend(FileManager *fm, CString *filename) {
+    int newBlkNum = FileManagerLength(fm, filename);
+    char *buffer = calloc(1, fm->blockSize);
+    BlockID *blk = BlockIDInit(CStringCreateFromCString(filename), newBlkNum);
+    FILE *f = FileManagerGetFile(fm, filename);
+    fseek(f, (long)blk->BlockID * fm->blockSize, SEEK_SET);
+    size_t bytesWritten = fwrite(buffer, 1, fm->blockSize, f);
+    fflush(f);
+    if (bytesWritten != fm->blockSize) {
+        perror("Failed to append block");
+    }
+    free(buffer);
+
+    return blk;
+}
+\end{dbcode}
+\label{code:file-page-append}
+
+\section{运行与观察}
+\label{sec:file-page-run}
+
+本章测试已经接入根目录 \codepath{CMakeLists.txt}。在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建和运行：
+
+\begin{dbcode}[listing options={language=bash}]{构建并运行 File 相关测试}
+cmake -S . -B build
+mingw32-make -C build -j8 SHELL=cmd.exe
+ctest --test-dir build --output-on-failure -R File
+\end{dbcode}
+
+如果只想运行本章新增测试，可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{只运行 FileManagerBasicTest}
+ctest --test-dir build --output-on-failure -R FileManagerBasicTest
+\end{dbcode}
+
+图 \ref{fig:file-page-roundtrip} 概括了本章最关键的写入再读回过程。测试先在一个 \codepath{Page} 中写入整数和字符串，再调用 \apiname{FileManagerWrite} 写入文件块，随后用另一个 \codepath{Page} 调用 \apiname{FileManagerRead} 读回，并断言内容一致。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dbnode] (set) {PageSetInt\\PageSetString};
+    \node[dbnode, right=of set] (writepage) {writePage\\内存页};
+    \node[dbnode, right=of writepage] (write) {FileManagerWrite};
+    \node[dbnode, right=of write] (block) {BlockID\\page\_roundtrip.tbl:0};
+    \node[dbnode, below=of block] (file) {测试文件块};
+    \node[dbnode, left=of file] (read) {FileManagerRead};
+    \node[dbnode, left=of read] (readpage) {readPage\\内存页};
+    \node[dbnode, left=of readpage] (get) {PageGetInt\\PageGetString};
+
+    \draw[dbarrow] (set) -- (writepage);
+    \draw[dbarrow] (writepage) -- (write);
+    \draw[dbarrow] (write) -- (block);
+    \draw[dbdown] (block) -- (file);
+    \draw[dbarrow] (file) -- (read);
+    \draw[dbarrow] (read) -- (readpage);
+    \draw[dbarrow] (readpage) -- (get);
+  \end{tikzpicture}}
+  \caption{Page 写入、FileManager 落盘、再读回的调用链}
+  \label{fig:file-page-roundtrip}
+\end{figure}
+
+运行本章实验时，建议重点观察四件事：第一，\codepath{Page} 写入的数据是否能在同一页中读回；第二，\codepath{FileManagerWrite} 写入块后，另一个 \codepath{Page} 是否能从同一块读回相同内容；第三，\codepath{BlockID} 如何用文件名和块号确定目标位置；第四，这一层如何为后续 \codepath{BufferManager} 提供“读块、写块、追加块”的底座。
+
+\section{思考题}
+\label{sec:file-page-questions}
+
+\begin{enumerate}
+  \item 为什么数据库通常按块或页读写文件，而不是每次只读写一个字段？
+  \item \codepath{Page} 为什么要提供 int 和 string 的读写接口？这些接口与页内字节布局有什么关系？
+  \item \codepath{BlockID} 为什么需要同时保存文件名和块号？如果只保存块号会有什么问题？
+  \item 如果一次实验中把块大小从 400 改成更大的值，可能影响哪些上层模块或测试？
+\end{enumerate}
