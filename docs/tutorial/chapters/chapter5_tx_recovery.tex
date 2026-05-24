@@ -2,16 +2,293 @@
 \label{chap:tx-recovery}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:tx-purpose}
+
+本章用于理解 DBMS\_C 中事务层的基本职责。事务并不是单独完成读写的模块，它会把文件层、日志层、缓冲区层、并发控制层和恢复层组织在一起，对上层提供相对统一的读写入口。
+
+本轮只完成事务基础实验，也就是验证 \codepath{Transaction} 如何通过 \codepath{BufferList} 使用 \codepath{BufferManager}，并在提交时把修改写回到底层文件。并发锁、死锁检测、回滚恢复和崩溃恢复属于后续实验内容，本章只保留 TODO，不提前展开。
+
+\section{模块作用}
+\label{sec:tx-role}
+
+\codepath{tx/} 模块位于查询执行、记录管理和底层缓冲区管理之间。上层模块不需要直接操作每一个 \codepath{Buffer}，而是可以通过事务接口 pin 块、读取页内数据、写入页内数据、提交或回滚事务。
+
+在当前实现中，\codepath{Transaction} 初始化时会创建三个重要的协作对象：\codepath{RecoveryManager}、\codepath{ConCurrencyManager} 和 \codepath{BufferList}。其中 \codepath{BufferList} 记录当前事务已经 pin 的块和对应 Buffer，使事务可以在后续读写时找到已经固定的缓冲页。
 
 \section{相关源码文件}
-TODO
+\label{sec:tx-source-files}
+
+表 \ref{tab:tx-source-files} 列出本轮事务基础实验涉及的真实源码文件。锁和恢复相关文件虽然会被 \codepath{Transaction} 调用，但本轮只说明它们在事务对象中的位置，不测试其内部细节。
+
+\begin{table}[htbp]
+  \centering
+  \caption{Transaction 基础实验相关源码文件}
+  \label{tab:tx-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    tx/Transaction.h & 声明事务状态、事务结构体和 pin、get、set、commit 等接口。\\
+    tx/Transaction.c & 实现事务初始化、读写、提交、回滚以及对 BufferList 的调用。\\
+    tx/BufferList.h & 声明事务私有的块到 Buffer 映射和 pin 列表。\\
+    tx/BufferList.c & 实现事务 pin/unpin 块、查找 Buffer、提交时释放所有 Buffer。\\
+    buffer/BufferManager.h & 提供缓冲区池、pin/unpin、flush 等能力。\\
+    File/FileManager.h & 提供文件块读写能力，是提交后验证持久化结果的基础。\\
+    Log/LogManager.h & 为 RecoveryManager 写入事务日志提供底层日志管理能力。\\
+    tx/concurrency/ConcurrencyManager.h & 被 Transaction 调用以申请读写锁；本轮不展开锁实现。\\
+    tx/recovery/RecoveryManager.h & 被 Transaction 调用以记录和提交日志；本轮不展开恢复算法。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+从阅读顺序看，可以先阅读 \codepath{Transaction.h}，了解事务暴露给上层的接口；再看 \codepath{Transaction.c} 中这些接口如何转发到 \codepath{BufferList}、\codepath{BufferManager}、\codepath{ConCurrencyManager} 和 \codepath{RecoveryManager}；最后再回到第4章的缓冲区管理内容，理解提交时为什么要释放和写回 Buffer。
+
+\section{Transaction 在系统中的位置}
+\label{sec:tx-position}
+
+图 \ref{fig:tx-position} 展示了当前事务对象与周边模块的关系。事务层向上承接记录、扫描和更新执行，向下连接缓冲区、文件和日志。并发控制和恢复管理是事务对象内部的重要协作者，但本轮测试只验证基础读写与提交路径。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.94\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 14mm]
+    \node[dblevel] (upper) {记录管理 / 扫描执行 / 更新执行};
+    \node[dblevel, below=of upper] (tx) {Transaction\\pin / get / set / commit};
+    \node[dbnode, below left=of tx] (bl) {BufferList\\当前事务 pin 的块};
+    \node[dbnode, below=of tx] (cc) {ConcurrencyManager\\读写锁入口};
+    \node[dbnode, below right=of tx] (rm) {RecoveryManager\\日志与恢复入口};
+    \node[dbsubnode, below=of bl] (bm) {BufferManager\\缓冲池};
+    \node[dbsubnode, below=of bm] (fm) {FileManager\\文件块读写};
+    \node[dbsubnode, below=of rm] (lm) {LogManager\\日志追加与刷盘};
+
+    \draw[dbdown] (upper) -- (tx);
+    \draw[dbdown] (tx) -- (bl);
+    \draw[dbdown] (tx) -- (cc);
+    \draw[dbdown] (tx) -- (rm);
+    \draw[dbdown] (bl) -- (bm);
+    \draw[dbdown] (bm) -- (fm);
+    \draw[dbdown] (rm) -- (lm);
+    \draw[dbdashline] (rm) -- (bm);
+  \end{tikzpicture}}
+  \caption{Transaction 与缓冲区、并发控制和恢复管理的关系}
+  \label{fig:tx-position}
+\end{figure}
+
+这张图中的虚线表示恢复管理在提交时会要求缓冲区刷出某个事务修改过的页。由于本轮测试使用 \codepath{TransactionSetInt(..., false)}，它不生成数据修改日志，只验证事务提交后 Buffer 能写回文件；日志语义将在恢复实验中再单独观察。
+
+\section{BufferList 的作用}
+\label{sec:tx-buffer-list}
+
+\codepath{BufferList} 是事务层和缓冲区层之间的一层薄封装。它做两件事：第一，把当前事务 pin 过的 \codepath{BlockID} 映射到对应 \codepath{Buffer}；第二，维护一个 pin 列表，方便事务提交或回滚时一次性释放该事务固定过的所有 Buffer。
+
+图 \ref{fig:tx-buffer-list} 展示了这个关系。事务对同一个块执行读写时，并不是每次都重新从 \codepath{BufferManager} 查找，而是可以通过 \codepath{BufferListGetBuffer} 找到当前事务已经 pin 的 Buffer。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.86\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 14mm]
+    \node[dbnode] (tx) {Transaction};
+    \node[dbnode, right=of tx] (pin) {BufferList\\pin linked list};
+    \node[dbnode, below=of pin] (map) {map\\BlockID string -> Buffer};
+    \node[dbsubnode, right=of pin] (b1) {BlockID\\tx\_basic.tbl, 1};
+    \node[dbsubnode, right=of map] (buf) {Buffer\\page + pins};
+    \node[dbsubnode, below=of buf] (page) {Page\\offset 32 -> int};
+
+    \draw[dbarrow] (tx) -- node[above,font=\footnotesize] {TransactionPin} (pin);
+    \draw[dbdown] (pin) -- (map);
+    \draw[dbarrow] (pin) -- (b1);
+    \draw[dbarrow] (map) -- (buf);
+    \draw[dbdown] (buf) -- (page);
+  \end{tikzpicture}}
+  \caption{BufferList 维护事务使用过的 BlockID 和 Buffer}
+  \label{fig:tx-buffer-list}
+\end{figure}
+
+\section{事务基础读写与提交流程}
+\label{sec:tx-basic-flow}
+
+本轮实验只观察一条最小事务链路：初始化事务，pin 一个文件块，在该块对应的 Page 中写入整数，提交事务，再通过 \codepath{FileManagerRead} 从文件中读回验证结果。图 \ref{fig:tx-basic-flow} 给出了这个调用链。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dbnode] (init) {TransactionInit};
+    \node[dbnode, right=of init] (pin) {TransactionPin};
+    \node[dbnode, right=of pin] (set) {TransactionSetInt};
+    \node[dbnode, below=of set] (get) {TransactionGetInt};
+    \node[dbnode, left=of get] (commit) {TransactionCommit};
+    \node[dbnode, left=of commit] (read) {FileManagerRead 验证};
+    \node[dbsubnode, below=of pin] (buffer) {BufferList / BufferManager};
+    \node[dbsubnode, below=of commit] (flush) {RecoveryCommit\\BufferManagerFlushAll};
+
+    \draw[dbarrow] (init) -- (pin);
+    \draw[dbarrow] (pin) -- (set);
+    \draw[dbdown] (pin) -- (buffer);
+    \draw[dbarrow] (set) -- (get);
+    \draw[dbarrow] (get) -- (commit);
+    \draw[dbdown] (commit) -- (flush);
+    \draw[dbarrow] (commit) -- (read);
+  \end{tikzpicture}}
+  \caption{Transaction 基础读写与提交调用链}
+  \label{fig:tx-basic-flow}
+\end{figure}
+
+这条链路刻意避开了回滚恢复断言，因为回滚需要结合 \codepath{RecoveryManager} 的日志记录和旧值恢复语义来设计测试。为了保持章节边界清晰，本轮只确认事务与 BufferList、BufferManager 的基础协作。
 
 \section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+\label{sec:tx-test}
 
-\section{实验内容}
-TODO
+本章新增并注册了配套测试文件：
+\begin{itemize}
+  \item \codepath{test/tx/TransactionBasicTest.c}
+\end{itemize}
+
+该测试使用独立数据库目录，目录名包含进程号和用例计数，数据文件为 \codepath{tx_basic.tbl}，日志文件为 \codepath{tx_basic.log}。测试完成后会尽量清理测试目录，避免污染真实数据库文件。
+
+\begin{table}[htbp]
+  \centering
+  \caption{TransactionBasicTest 覆盖内容}
+  \label{tab:tx-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_transaction\_init\_reports\_environment & 创建 Transaction 后，事务处于 RUN 状态，能报告块大小、可用 Buffer 数，并持有 BufferList、ConcurrencyManager、RecoveryManager。\\
+    test\_transaction\_pin\_and\_unpin\_updates\_available\_buffers & 通过 Transaction pin 一个 BlockID 后，可用 Buffer 数减少；unpin 后可用 Buffer 数恢复。\\
+    test\_transaction\_set\_int\_commit\_persists\_value & 通过 TransactionSetInt 写入整数，提交后使用 FileManagerRead 从文件块读回同一整数。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+运行本章测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{运行事务基础测试}
+ctest --test-dir build --output-on-failure -R Transaction
+\end{dbcode}
+
+完整回归测试仍然使用：
+
+\begin{dbcode}[listing options={language=bash}]{完整 CTest 回归}
+ctest --test-dir build --output-on-failure
+\end{dbcode}
+
+\section{关键代码讲解}
+\label{sec:tx-code}
+
+第一段代码来自 \codepath{tx/Transaction.c} 的 \apiname{TransactionInit}。事务初始化时会保存文件管理器和缓冲区管理器，并创建恢复管理器、并发管理器和 BufferList。
+
+\begin{dbcode}{TransactionInit 初始化事务协作对象}
+Transaction* TransactionInit(FileManager*fileManager,
+                             LogManager*logManager,
+                             BufferManager*bufferManager){
+    Transaction *transaction = malloc(sizeof (Transaction));
+    transaction->txNum = TransactionNextTxNumber(transaction);
+    transaction->fileManager = fileManager;
+    transaction->bufferManager = bufferManager;
+    transaction->recoveryManager =
+        RecoveryManagerInit(transaction, transaction->txNum,
+                            logManager, bufferManager);
+    transaction->conCurrencyManager = ConCurrencyManagerInit();
+    transaction->bufferList = BufferListInit(bufferManager);
+    transaction->code = TX_TRANSACTION_RUN;
+    return transaction;
+}
+\end{dbcode}
+
+第二段代码来自 \codepath{tx/BufferList.c} 的 \apiname{BufferListPin}。它向 BufferManager 申请目标块对应的 Buffer，并把块到 Buffer 的映射记录到当前事务的 BufferList 中。
+
+\begin{dbcode}{BufferListPin 记录事务 pin 的块}
+void BufferListPin(BufferList *bufferList, BlockID *blockId){
+    Buffer *buffer = BufferManagerPin(bufferList->bufferManager, blockId);
+    BufferTEMP *bufferTemp = BufferTEMPInit();
+    bufferTemp->buffer = buffer;
+    map_set(bufferList->buffers,
+            CStringGetPtr(BlockID2CString(blockId)),
+            *bufferTemp);
+
+    BlockIDNode *blockIdNode = bufferList->pin;
+    while(blockIdNode->next != NULL){
+        blockIdNode = blockIdNode->next;
+    }
+    BlockIDNode *NewBlockIDNode = malloc(sizeof(BlockIDNode));
+    NewBlockIDNode->blockId = BlockIDInit(blockId->fileName,
+                                          blockId->BlockID);
+    NewBlockIDNode->next = NULL;
+    blockIdNode->next = NewBlockIDNode;
+}
+\end{dbcode}
+
+第三段代码来自 \codepath{tx/Transaction.c} 的 \apiname{TransactionSetInt}。写入前事务会申请写锁，随后从 BufferList 找到 Buffer，把整数写入 Page，并把 Buffer 标记为本事务修改过。
+
+\begin{dbcode}{TransactionSetInt 写入页内整数}
+void TransactionSetInt(Transaction*transaction, BlockID *blockId,
+                       int offset, int val, bool okToLog){
+    ConCurrencyManagerXLock(transaction->conCurrencyManager, blockId);
+    Buffer *buffer = BufferListGetBuffer(transaction->bufferList, blockId);
+    int lsn = -1;
+    if(okToLog){
+        lsn = RecoverySetInt(transaction->recoveryManager,
+                             buffer, offset, val);
+    }
+    Page *page = buffer->page;
+    PageSetInt(page, offset, val);
+    BufferSetModified(buffer, transaction->txNum, lsn);
+}
+\end{dbcode}
+
+第四段代码来自 \codepath{tx/Transaction.c} 的 \apiname{TransactionCommit}。提交时先走恢复管理器的提交入口，再释放锁和当前事务 pin 过的 Buffer，最后把事务状态改为已提交。
+
+\begin{dbcode}{TransactionCommit 提交事务}
+void TransactionCommit(Transaction*transaction){
+    TransactionTraceCommit(transaction);
+    RecoveryCommit(transaction->recoveryManager);
+    printf("transaction %d commit\n", transaction->txNum);
+    ConCurrencyManagerRelease(transaction->conCurrencyManager);
+    BufferListUnpinAll(transaction->bufferList);
+    transaction->code = TX_TRANSACTION_COMMIT;
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:tx-run-observe}
+
+本章的建议观察顺序如下：
+
+\begin{enumerate}
+  \item 运行 \codepath{ctest --test-dir build --output-on-failure -R Transaction}，确认事务基础测试通过。
+  \item 观察 \codepath{TransactionInit} 是否为事务创建必要的协作对象。
+  \item 观察 pin/unpin 前后 \codepath{TransactionAvailableBuffs} 的变化，理解事务如何占用和释放 Buffer。
+  \item 观察 \codepath{TransactionSetInt} 写入后，提交是否能让 \codepath{FileManagerRead} 从文件块中读回相同整数。
+  \item 注意本轮没有断言 rollback、死锁检测和崩溃恢复，这些内容必须等对应测试补齐后再写入实验正文。
+\end{enumerate}
+
+\section{后续小节 TODO}
+\label{sec:tx-future}
+
+表 \ref{tab:tx-future-plan} 记录第5章后续实验边界。当前只完成 5A 事务基础，后续内容仍按“先补 CTest，再写章节”的规则推进。
+
+\begin{table}[htbp]
+  \centering
+  \caption{第5章后续实验安排}
+  \label{tab:tx-future-plan}
+  \begin{tabularx}{\textwidth}{l Y Y}
+    \toprule
+    阶段 & 内容 & 当前状态 \\
+    \midrule
+    5A & Transaction、BufferList、BufferManager 的基础协作 & 已新增 TransactionBasicTest 并通过。\\
+    5B & 并发锁、锁表、死锁检测基础实验 & TODO：先补真实 CTest，再写正文。\\
+    5C & RecoveryManager、回滚与恢复基础实验 & TODO：先补真实 CTest，再写正文。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \section{思考题}
-TODO
+\label{sec:tx-questions}
+
+\begin{enumerate}
+  \item 为什么事务层不直接读写文件，而是通过 BufferManager 和 BufferList 间接访问 Page？
+  \item Transaction 为什么需要同时持有 ConcurrencyManager 和 RecoveryManager？
+  \item 如果事务提交时没有释放已经 pin 的 Buffer，后续模块可能遇到什么问题？
+  \item 为什么回滚测试不能只检查 TransactionRollback 是否被调用，而要结合日志和旧值恢复结果来验证？
+\end{enumerate}
