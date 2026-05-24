@@ -272,6 +272,7 @@ if(HAVE_CMOCKA)
 
     # Record 模块测试
     add_cmocka_test(RecordTest ${TEST_DIR}/record/RecordTest.c)
+    add_cmocka_test(RecordBasicTest ${TEST_DIR}/record/RecordBasicTest.c)
 
     # Query 模块测试
     add_cmocka_test(ExpressionTest ${TEST_DIR}/query/ExpressionTest.c)

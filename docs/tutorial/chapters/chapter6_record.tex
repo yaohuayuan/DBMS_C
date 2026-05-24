@@ -2,16 +2,299 @@
 \label{chap:record}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:record-purpose}
+
+本章用于理解 DBMS\_C 如何把上层的“表、字段、记录”落实为页内的固定长度记录槽。前面章节已经看到，\codepath{FileManager} 负责文件块读写，\codepath{BufferManager} 负责把块缓存到内存，\codepath{Transaction} 负责通过缓冲区读写页内数据；记录管理层则站在这些能力之上，进一步提供表结构描述、字段偏移计算、记录标识和顺序扫描能力。
+
+本章只讨论 \codepath{record/} 模块本身，不提前展开元数据目录、SQL 解析、查询计划和优化器内容。通过本章实验，读者应能回答三个问题：表结构如何变成页内布局，记录如何通过 slot 存放在 Page 中，TableScan 如何在表文件中插入并顺序读出记录。
+
+\section{模块作用}
+\label{sec:record-role}
+
+\codepath{record/} 模块位于事务和缓冲区之上、元数据和查询执行之下。它不直接理解 SQL 语句，也不维护系统 catalog，而是提供更底层的记录组织能力：\codepath{Schema} 描述字段集合，\codepath{Layout} 计算每个字段在记录槽中的偏移，\codepath{RID} 标识记录位置，\codepath{RecordPage} 在单个页内管理 slot，\codepath{TableScan} 在表文件的一个或多个块之间顺序移动。
+
+本章新增的 \codepath{RecordBasicTest} 选择了最小闭环：先独立验证 Schema、Layout 和 RID，再通过 Transaction、RecordPage 和 TableScan 写入一条记录并读回。这样可以确认记录管理层的关键抽象已经能独立工作，同时避免把第7章以后的元数据和 SQL 执行链路混入本章。
 
 \section{相关源码文件}
-TODO
+\label{sec:record-source-files}
+
+表 \ref{tab:record-source-files} 列出本章直接展开的真实源码文件。阅读时建议从 \codepath{Schema.h} 和 \codepath{Layout.h} 开始，因为它们决定一条记录在页中的形状；再看 \codepath{RecordPage.c}，理解 slot 如何被格式化、插入、删除和查找；最后看 \codepath{TableScan.c}，观察它如何把单页记录管理扩展为表文件扫描。
+
+\begin{table}[htbp]
+  \centering
+  \caption{Record 模块相关源码文件}
+  \label{tab:record-source-files}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    文件 & 本章关注点 \\
+    \midrule
+    record/Schema.h, record/Schema.c & 定义字段集合，支持添加 int/string 字段、查询字段类型和长度。\\
+    record/Layout.h, record/Layout.c & 根据 Schema 计算字段 offset 和每个记录槽的 SlotSize。\\
+    record/RID.h, record/RID.c & 用 block number 和 slot 标识一条记录的位置。\\
+    record/RecordPage.h, record/RecordPage.c & 在一个页中格式化 slot、查找空 slot、插入记录、读写字段值。\\
+    record/TableScan.h, record/TableScan.c & 在表文件上顺序扫描、插入、删除和读写当前记录。\\
+    tx/Transaction.h & RecordPage 和 TableScan 通过事务接口读写块内 Page。\\
+    File/BlockID.h & 标识记录所在的文件块。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+这些文件共同形成记录管理层的最小工作面。暂不展开的后续模块包括 \codepath{metadata/}、\codepath{parse/}、\codepath{plan/} 和 \codepath{query/} 中的查询组合逻辑，它们会在后续章节基于新的 CTest 单独说明。
+
+\section{核心对象职责}
+\label{sec:record-objects}
+
+图 \ref{fig:record-objects} 展示了本章几个核心对象的关系。Schema 和 Layout 负责“记录长什么样”，RID 负责“记录在哪里”，RecordPage 负责“页内怎么放”，TableScan 负责“表文件中怎么顺序移动”。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.93\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 13mm]
+    \node[dblevel] (schema) {Schema\\fields + type + length};
+    \node[dbnode, right=of schema] (layout) {Layout\\offsets + SlotSize};
+    \node[dbnode, below=of layout] (rp) {RecordPage\\slot format / insert / get / set};
+    \node[dbnode, right=of rp] (ts) {TableScan\\table file scan};
+    \node[dbsubnode, below=of rp] (tx) {Transaction\\pin + get + set};
+    \node[dbsubnode, left=of tx] (block) {BlockID\\file + block number};
+    \node[dbsubnode, right=of tx] (rid) {RID\\block number + slot};
+
+    \draw[dbarrow] (schema) -- (layout);
+    \draw[dbdown] (layout) -- (rp);
+    \draw[dbarrow] (rp) -- (ts);
+    \draw[dbdown] (rp) -- (tx);
+    \draw[dbarrow] (block) -- (rp);
+    \draw[dbarrow] (ts) -- (rid);
+  \end{tikzpicture}}
+  \caption{Schema、Layout、RecordPage、TableScan 与 RID 的关系}
+  \label{fig:record-objects}
+\end{figure}
+
+在当前实现中，Layout 生成的每条记录槽都从一个 int 标志位开始，后面依次排列字段。RecordPage 通过这个标志位区分空槽和已使用槽，TableScan 则把 RecordPage 封装起来，使上层可以按“当前记录”的方式读写字段。
+
+\section{Schema 与 Layout}
+\label{sec:record-schema-layout}
+
+\codepath{Schema} 保存字段链表和字段信息映射。调用 \apiname{SchemaAddIntField} 会添加类型为 \codepath{FILE_INFO_CODE_INTEGER}、长度为 4 的字段；调用 \apiname{SchemaAddStringField} 会添加类型为 \codepath{FILE_INFO_CODE_VARCHAR} 的字符串字段，并保存传入的最大长度。
+
+\codepath{Layout} 根据 Schema 计算页内记录布局。当前实现把每个 slot 的第一个 \codepath{sizeof(int)} 字节留给状态标志，字段从这个位置之后开始排列。int 字段占用 \codepath{sizeof(int)} 字节，字符串字段占用“长度前缀 int + 字符数据长度”。图 \ref{fig:record-slot-layout} 用本章测试中的 \codepath{id int, name varchar(20)} 展示这一布局。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=0mm]
+    \node[dbsubnode, text width=24mm, minimum height=10mm] (flag) {flag\\offset 0};
+    \node[dbsubnode, text width=24mm, minimum height=10mm, right=0mm of flag] (id) {id int\\offset 4};
+    \node[dbsubnode, text width=34mm, minimum height=10mm, right=0mm of id] (len) {name length\\offset 8};
+    \node[dbsubnode, text width=45mm, minimum height=10mm, right=0mm of len] (data) {name bytes\\20 bytes};
+    \node[below=6mm of id, font=\footnotesize\color{DBMSGray}] {SlotSize = sizeof(int) + sizeof(int) + sizeof(int) + 20};
+  \end{tikzpicture}}
+  \caption{id/name 记录槽的页内字节布局示意}
+  \label{fig:record-slot-layout}
+\end{figure}
+
+\section{RID 与记录位置}
+\label{sec:record-rid}
+
+\codepath{RID} 是记录标识符，只保存两个整数：\codepath{BlockNum} 和 \codepath{Slot}。它不保存表名，因为 TableScan 已经知道自己正在扫描哪个表文件；当需要定位表内某条记录时，block number 指向文件中的块号，slot 指向该块中的记录槽号。
+
+本章测试只验证 RID 的最小行为：初始化后能保存 block 和 slot，两个 RID 能比较是否相等，\apiname{RIDToString} 能生成类似 \codepath{(3,7)} 的字符串形式。更复杂的 RID 定位路径与 \codepath{TableScanMoveToRid} 有关，本轮不把它作为测试目标。
+
+\section{RecordPage 的 slot 生命周期}
+\label{sec:record-page}
+
+\codepath{RecordPage} 管理单个 Page 中的多个 slot。调用 \apiname{RecordPageFormat} 会逐个 slot 写入 \codepath{RECORD_PAGE_EMPTY} 标志，并把每个字段初始化为 0 或空字符串。随后 \apiname{RecordPageInsertAfter} 会查找下一个空 slot，将其标志改为 \codepath{RECORD_PAGE_USED}，再由 \apiname{RecordSetInt} 和 \apiname{RecordSetString} 写入字段值。
+
+图 \ref{fig:record-page-lifecycle} 展示了一个 slot 的基本生命周期。本章测试覆盖 format、insert、set、get 和 next 查找，不覆盖复杂删除重用场景，因为已有旧测试 \codepath{RecordTest} 中已经包含 slot 管理相关断言。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=9mm and 13mm]
+    \node[dbnode] (format) {RecordPageFormat\\flag = EMPTY};
+    \node[dbnode, right=of format] (insert) {InsertAfter\\find empty slot};
+    \node[dbnode, right=of insert] (used) {flag = USED};
+    \node[dbnode, below=of used] (set) {RecordSetInt/String};
+    \node[dbnode, left=of set] (get) {RecordPageGetInt/String};
+    \node[dbnode, left=of get] (next) {NextAfter\\find used slot};
+
+    \draw[dbarrow] (format) -- (insert);
+    \draw[dbarrow] (insert) -- (used);
+    \draw[dbdown] (used) -- (set);
+    \draw[dbarrow] (set) -- (get);
+    \draw[dbarrow] (get) -- (next);
+  \end{tikzpicture}}
+  \caption{RecordPage 中一个记录槽的基本生命周期}
+  \label{fig:record-page-lifecycle}
+\end{figure}
+
+\section{TableScan 顺序插入与读回}
+\label{sec:record-table-scan}
+
+\codepath{TableScan} 把单页的 RecordPage 操作扩展到整个表文件。初始化时，它会把表名拼接成 \codepath{.tbl} 文件名；如果文件长度为 0，就追加新块并格式化第一页；否则移动到第 0 块。插入时，TableScan 在当前 RecordPage 中查找空 slot；如果当前块已满，就移动或追加下一个块。
+
+当前 Scan 体系中，TableScan 的公开读写函数内部会把传入参数转换为 \codepath{Scan*}，再访问 \codepath{scanUnion.tableScan}。因此本章测试不会直接把裸 \codepath{TableScan*} 传给这些函数，而是先调用 \codepath{ScanInit(tableScan, SCAN_TABLE_CODE)} 进行包装。图 \ref{fig:record-table-scan-chain} 展示本章测试采用的最小链路。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dbnode] (init) {TableScanInit};
+    \node[dbnode, right=of init] (scan) {ScanInit\\SCAN\_TABLE\_CODE};
+    \node[dbnode, right=of scan] (insert) {TableScanInsert};
+    \node[dbnode, below=of insert] (set) {SetInt / SetString};
+    \node[dbnode, left=of set] (before) {BeforeFirst};
+    \node[dbnode, left=of before] (next) {Next};
+    \node[dbnode, below=of before] (read) {GetInt / GetString};
+
+    \draw[dbarrow] (init) -- (scan);
+    \draw[dbarrow] (scan) -- (insert);
+    \draw[dbdown] (insert) -- (set);
+    \draw[dbarrow] (set) -- (before);
+    \draw[dbarrow] (before) -- (next);
+    \draw[dbdown] (next) -- (read);
+  \end{tikzpicture}}
+  \caption{TableScan 插入并顺序读回记录的调用链}
+  \label{fig:record-table-scan-chain}
+\end{figure}
 
 \section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+\label{sec:record-test}
 
-\section{实验内容}
-TODO
+本章新增并注册了配套测试文件：
+
+\begin{itemize}
+  \item \codepath{test/record/RecordBasicTest.c}
+\end{itemize}
+
+该测试使用独立数据库目录，目录名包含进程号和用例计数；数据文件包括 \codepath{record_basic.tbl} 和 \codepath{record_basic_scan.tbl}，日志文件为 \codepath{record_basic.log}。测试结束时会尽量删除这些文件和目录，避免污染真实数据库数据。
+
+\begin{table}[htbp]
+  \centering
+  \caption{RecordBasicTest 覆盖内容}
+  \label{tab:record-tests}
+  \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
+    \toprule
+    测试函数 & 验证目标 \\
+    \midrule
+    test\_schema\_adds\_int\_and\_string\_fields & 添加 int/string 字段后，字段存在，类型和长度正确。\\
+    test\_layout\_computes\_offsets\_and\_slot\_size & Layout 为 id/name 字段计算正确 offset，并得到符合当前实现的 SlotSize。\\
+    test\_rid\_stores\_identity & RID 保存 block/slot，能比较相等性，并能生成字符串表示。\\
+    test\_record\_page\_insert\_set\_and\_read\_fields & RecordPage 格式化页面后插入 slot，写入 id/name，再读回同样的值。\\
+    test\_table\_scan\_insert\_and\_read\_record & TableScan 经 Scan 包装后插入一条记录，回到表头顺序读出该记录。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+单独运行本章测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{运行 Record 相关测试}
+ctest --test-dir build --output-on-failure -R Record
+\end{dbcode}
+
+只运行本章新增测试可以使用：
+
+\begin{dbcode}[listing options={language=bash}]{只运行 RecordBasicTest}
+ctest --test-dir build --output-on-failure -R RecordBasicTest
+\end{dbcode}
+
+\section{关键代码讲解}
+\label{sec:record-code}
+
+第一段代码来自 \codepath{record/Layout.c} 的 \apiname{LayoutInit}。它从 slot 标志位之后开始放置字段，并把每个字段名映射到当前位置。
+
+\begin{dbcode}{LayoutInit 计算字段偏移}
+int pos = sizeof(int);
+FieldNode *fieldNode = schema->fields;
+while(fieldNode != NULL){
+    map_set(layout->offsets, CStringGetPtr(fieldNode->fileName), pos);
+    pos += LayoutLengthInBytes(schema, fieldNode->fileName);
+    fieldNode = fieldNode->next;
+}
+layout->SlotSize = pos;
+\end{dbcode}
+
+第二段代码来自 \codepath{record/RecordPage.c} 的 \apiname{RecordPageFormat}。格式化页面时，每个 slot 都先写入空标志，再按字段类型写入默认值。
+
+\begin{dbcode}{RecordPageFormat 初始化页内 slot}
+while (RecordPageIsValidSlot(recordPage, slot)){
+    TransactionSetInt(recordPage->transaction, recordPage->blockId,
+                      RecordPageOffset(recordPage, slot),
+                      RECORD_PAGE_EMPTY, false);
+    Schema *schema = recordPage->layout->schema;
+    FieldNode *fieldNode = schema->fields;
+    while (fieldNode != NULL){
+        CString *fldName = fieldNode->fileName;
+        int fldPos = RecordPageOffset(recordPage, slot)
+                   + LayoutOffset(recordPage->layout, fldName);
+        if(SchemaType(schema, fldName) == FILE_INFO_CODE_INTEGER){
+            TransactionSetInt(recordPage->transaction,
+                              recordPage->blockId, fldPos, 0, false);
+        }else{
+            TransactionSetString(recordPage->transaction,
+                                 recordPage->blockId, fldPos,
+                                 CStringCreateFromCStr(""), false);
+        }
+        fieldNode = fieldNode->next;
+    }
+    slot++;
+}
+\end{dbcode}
+
+第三段代码来自 \codepath{record/RecordPage.c} 的 \apiname{RecordPageInsertAfter}。它复用 \apiname{RecordPageSearchAfter} 查找空 slot，找到后只需要把 flag 改成已使用。
+
+\begin{dbcode}{RecordPageInsertAfter 查找并占用空 slot}
+int RecordPageInsertAfter(RecordPage *recordPage, int slot){
+    int newSlot = RecordPageSearchAfter(recordPage, slot,
+                                        RECORD_PAGE_EMPTY);
+    if(newSlot >= 0){
+        RecordPageSetFlag(recordPage, newSlot, RECORD_PAGE_USED);
+    }
+    return newSlot;
+}
+\end{dbcode}
+
+第四段代码来自 \codepath{record/TableScan.c} 的 \apiname{TableScanInit}。它把表名转换为表文件名，并根据文件是否为空决定追加新块还是打开已有块。
+
+\begin{dbcode}{TableScanInit 建立表文件扫描}
+CString *filename = CStringCreateFromCString(TBName);
+CStringAppendCStr(filename, ".tbl");
+tableScan->fileName = filename;
+
+tableScan->recordPage = NULL;
+if(TransactionSize(transaction, filename) == 0){
+    TableScanMoveToNewBlock(tableScan);
+}else{
+    TableScanMoveToBlock(tableScan, 0);
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:record-run}
+
+在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建并运行测试：
+
+\begin{dbcode}[listing options={language=bash}]{构建并运行 Record 测试}
+cmake -S . -B build
+mingw32-make -C build -j8 SHELL=cmd.exe
+ctest --test-dir build --output-on-failure -R Record
+\end{dbcode}
+
+观察测试输出时，可以重点看五个点：
+
+\begin{enumerate}
+  \item Schema 添加字段后，字段类型和长度是否与调用参数一致。
+  \item Layout 是否把第一个字段放在 slot 标志位之后。
+  \item RID 是否只承担“块号 + 槽号”的轻量位置标识职责。
+  \item RecordPage 写入字段后，是否能从同一个 slot 读回相同值。
+  \item TableScan 是否能在表文件中插入一条记录，并通过顺序扫描读回。
+\end{enumerate}
 
 \section{思考题}
-TODO
+\label{sec:record-questions}
+
+\begin{enumerate}
+  \item 为什么记录页中的每个 slot 需要一个状态标志位？
+  \item Layout 为什么要把字段名映射到页内 offset，而不是每次读写时重新计算？
+  \item RID 为什么只保存 block number 和 slot，而不直接保存字段值或表结构？
+  \item TableScan 为什么需要建立在 RecordPage 之上，而不是直接操作 Page？
+\end{enumerate}
