@@ -294,6 +294,7 @@ if(HAVE_CMOCKA)
     add_cmocka_test(HashIndexTest ${TEST_DIR}/index/HashIndexTest.c)
 
     enable_testing()
+
 else()
     message(STATUS "Tests disabled - CMocka not available")
 endif()

@@ -2,16 +2,329 @@
 \label{chap:trace-visualization}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:trace-purpose}
 
-\section{相关源码文件}
-TODO
+本章通过 DBMS\_C 已有的 Trace 模式观察 SQL 在系统内部的执行链路。前面第8章已经说明 SQL 如何被解析为 \codepath{QueryData} 或各类更新命令 Data 对象，第9章说明 SELECT 如何生成 Plan 并打开为 Scan，第10章说明更新命令如何进入 \codepath{PlannerExecuteUpdate} 和 \codepath{BasicUpdatePlanner}。Trace 模式把这些分散在源码中的过程以命令行文本形式输出出来，帮助读者把解析、计划、扫描、更新、事务和结果输出连成一条可观察的主线。
 
-\section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+本章是人工验证型实验，不新增自动 CTest。Trace 输出依赖交互式 CLI、标准输入和进程退出路径；此前尝试自动化运行时出现挂住和资源占用风险，因此本章选择更稳妥的人工演示方式。
 
-\section{实验内容}
-TODO
+\section{Trace 模式定位}
+\label{sec:trace-position}
+
+Trace 是 CLI 文本过程可视化，不是图形界面。它默认关闭，只有通过启动参数或交互命令开启后才会输出额外的 \codepath{[TRACE_*]} 行。Trace 的作用是观察执行过程，不参与 SQL 语义判断，也不应该改变查询结果、更新结果或事务行为。
+
+图 \ref{fig:trace-position} 展示了 Trace 在 DBMS\_C 执行链路中的位置。Trace 不是新的执行层，而是分布在关键边界处的观察点：Parser 生成数据对象后输出解析摘要，Planner 生成 Plan 后输出计划树，Plan 打开 Scan 后输出扫描链，更新和事务入口输出命令级过程。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 11mm]
+    \node[dblevel] (sql) {SQL 输入};
+    \node[dbnode, right=of sql] (parse) {Parser\\Data 对象};
+    \node[dbnode, right=of parse] (plan) {Planner\\Plan / Update};
+    \node[dbnode, below=of plan] (scan) {Scan / Metadata\\执行阶段};
+    \node[dbsubnode, left=of scan] (output) {Output / TX\\结果与事务};
+    \node[dblevel, below=of parse] (trace) {Trace 输出\\CLI 文本观察};
+
+    \draw[dbarrow] (sql) -- (parse);
+    \draw[dbarrow] (parse) -- (plan);
+    \draw[dbdown] (plan) -- (scan);
+    \draw[dbarrow] (scan) -- (output);
+    \draw[dbdashline] (parse) -- (trace);
+    \draw[dbdashline] (plan) -- (trace);
+    \draw[dbdashline] (scan) -- (trace);
+    \draw[dbdashline] (output) -- (trace);
+  \end{tikzpicture}}
+  \caption{Trace 在 DBMS\_C 执行链路中的位置}
+  \label{fig:trace-position}
+\end{figure}
+
+\section{开启与关闭方式}
+\label{sec:trace-enable}
+
+Trace 可以在启动时开启，也可以在 CLI 运行过程中切换。启动时开启使用：
+
+\begin{dbcode}[listing options={language=bash}]{启动时开启 Trace}
+bin\NewDBMS.exe --trace
+\end{dbcode}
+
+进入 SQL 提示符后，可以使用以下元命令：
+
+\begin{dbcode}[listing options={language=SQL}]{交互式 Trace 命令}
+trace on;
+trace off;
+trace;
+\end{dbcode}
+
+\codepath{--trace} 表示程序启动时开启 Trace；\codepath{trace on;} 表示运行过程中打开 Trace；\codepath{trace off;} 表示关闭 Trace；\codepath{trace;} 用于查看当前状态。普通模式下不会输出 Trace 行，因此普通 SQL 输出不受影响。
+
+\section{Trace 标签说明}
+\label{sec:trace-labels}
+
+Trace 标签由 \codepath{DBTraceLog} 统一输出，格式为 \codepath{[TRACE_阶段] 消息}。表 \ref{tab:trace-labels} 列出当前源码中实际使用的标签。
+
+\begin{table}[htbp]
+  \centering
+  \caption{Trace 标签说明}
+  \label{tab:trace-labels}
+  \begin{tabularx}{\textwidth}{l Y}
+    \toprule
+    标签 & 含义 \\
+    \midrule
+    \codepath{[TRACE_PARSE]} & 解析阶段摘要，例如字段列表、表名列表、谓词、更新命令参数。\\
+    \codepath{[TRACE_PLAN]} & SELECT 查询计划树，例如 ProjectPlan、SelectPlan、TablePlan。\\
+    \codepath{[TRACE_SCAN]} & 运行期扫描链，例如 ProjectScan、SelectScan、TableScan。\\
+    \codepath{[TRACE_OUTPUT]} & 输出阶段，例如渲染 SELECT 结果、结果行数、命令完成信息。\\
+    \codepath{[TRACE_UPDATE]} & 更新命令类型，例如 CREATE TABLE、INSERT、UPDATE、DELETE。\\
+    \codepath{[TRACE_PLANNER]} & 更新命令被分发到具体 BasicUpdatePlanner 执行函数。\\
+    \codepath{[TRACE_METADATA]} & 元数据登记动作，例如登记表结构、视图定义、索引信息。\\
+    \codepath{[TRACE_RECORD]} & 记录级摘要动作，例如插入、更新或删除匹配记录。\\
+    \codepath{[TRACE_TX]} & 事务动作，例如 COMMIT、ROLLBACK、事务编号和提交/回滚步骤。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{SELECT 查询 Trace 示例}
+\label{sec:trace-select}
+
+下面的示例用于观察 SELECT 主链路。为了避免已有数据库目录中的旧数据影响演示，建议每次使用新的表名。
+
+\begin{dbcode}[listing options={language=SQL}]{SELECT Trace 示例 SQL}
+CREATE TABLE student_trace_demo(id INT, name VARCHAR(20));
+INSERT INTO student_trace_demo(id, name) VALUES(1, 'wang');
+INSERT INTO student_trace_demo(id, name) VALUES(2, 'li');
+SELECT id, name FROM student_trace_demo WHERE id = 1;
+\end{dbcode}
+
+开启 Trace 后，可以重点观察如下片段：
+
+\begin{dbcode}{SELECT Trace 关键输出片段}
+[TRACE_PARSE] QueryData
+[TRACE_PARSE]   fields: id, name
+[TRACE_PARSE]   tables: student_trace_demo
+[TRACE_PLAN] Plan tree
+[TRACE_PLAN]   ProjectPlan fields=id, name
+[TRACE_SCAN] Scan chain
+[TRACE_SCAN]   ProjectScan fields=id, name
+[TRACE_OUTPUT] Rendering SELECT result rows
+[TRACE_OUTPUT] result rows: 1
+\end{dbcode}
+
+图 \ref{fig:trace-select-flow} 展示这些 Trace 行与前面章节内容的对应关系。\codepath{QueryData} 对应第8章 SQL 解析；\codepath{ProjectPlan / SelectPlan / TablePlan} 对应第9章查询计划；\codepath{ProjectScan / SelectScan / TableScan} 对应运行期扫描链；\codepath{result rows} 则对应最终输出阶段。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 10mm]
+    \node[dblevel] (sql) {SELECT SQL};
+    \node[dbnode, right=of sql] (parse) {TRACE\_PARSE\\QueryData};
+    \node[dbnode, right=of parse] (plan) {TRACE\_PLAN\\Plan tree};
+    \node[dbnode, below=of plan] (scan) {TRACE\_SCAN\\Scan chain};
+    \node[dbnode, left=of scan] (out) {TRACE\_OUTPUT\\result rows};
+
+    \draw[dbarrow] (sql) -- (parse);
+    \draw[dbarrow] (parse) -- (plan);
+    \draw[dbdown] (plan) -- (scan);
+    \draw[dbarrow] (scan) -- (out);
+  \end{tikzpicture}}
+  \caption{SELECT Trace 阶段链路}
+  \label{fig:trace-select-flow}
+\end{figure}
+
+\section{更新命令 Trace 示例}
+\label{sec:trace-update}
+
+更新命令 Trace 主要观察命令级过程，而不是深入 Buffer、File、Log 或 Recovery 的底层细节。CREATE TABLE 会显示命令类型、表名、字段摘要、Planner 分发和元数据登记；INSERT 会显示命令类型、表名和值摘要、打开表扫描、插入记录和事务层写入；UPDATE 和 DELETE 会显示谓词定位、记录修改或删除以及事务层摘要。
+
+\begin{dbcode}{更新命令 Trace 片段}
+[TRACE_UPDATE] CREATE TABLE command
+[TRACE_PARSE]   table: student_trace_demo
+[TRACE_METADATA] register table schema in catalog
+
+[TRACE_UPDATE] INSERT command
+[TRACE_PLANNER] dispatch to BasicUpdatePlannerExecuteInsert
+[TRACE_SCAN] open table scan for student_trace_demo
+[TRACE_RECORD] insert new record
+
+[TRACE_UPDATE] UPDATE command
+[TRACE_RECORD] update matched record
+
+[TRACE_UPDATE] DELETE command
+[TRACE_RECORD] delete matched record
+\end{dbcode}
+
+这些输出与第10章的 \codepath{PlannerExecuteUpdate} 和 \codepath{BasicUpdatePlannerExecute*} 直接对应。Trace 只是把分发和执行摘要打印出来，不改变命令返回的 affected rows，也不替代真正的模块测试。
+
+\section{事务命令 Trace 示例}
+\label{sec:trace-tx}
+
+事务命令 Trace 关注 COMMIT 和 ROLLBACK 的命令级过程。COMMIT 会输出提交命令、事务编号、flush modified buffers、write commit log 和 transaction committed；ROLLBACK 会输出回滚命令、事务编号、rollback transaction changes if any 和 transaction rolled back。
+
+\begin{dbcode}{事务 Trace 片段}
+[TRACE_TX] COMMIT command
+[TRACE_TX] transaction: 3
+[TRACE_TX] flush modified buffers
+[TRACE_TX] write commit log
+[TRACE_OUTPUT] transaction committed
+
+[TRACE_TX] ROLLBACK command
+[TRACE_TX] transaction: 4
+[TRACE_TX] rollback transaction changes if any
+[TRACE_OUTPUT] transaction rolled back
+\end{dbcode}
+
+需要注意，\codepath{exit} 会进入当前程序已有的关闭路径，关闭前会提交当前事务。因此 Trace 开启时，即使用户只是输入 \codepath{exit}，也可能看到退出阶段的 COMMIT Trace。这是现有事务关闭逻辑的一部分，不是额外的 Trace 行为。
+
+\section{人工验证步骤}
+\label{sec:trace-manual-verify}
+
+本章不运行自动测试，而是采用人工验证。进入项目目录后启动程序：
+
+\begin{dbcode}[listing options={language=bash}]{启动 Trace 演示}
+cd D:\code\DBMS\NewDBMS\DBMS_C
+.\bin\NewDBMS.exe --trace
+\end{dbcode}
+
+然后在 SQL 提示符中输入以下命令：
+
+\begin{dbcode}[listing options={language=SQL}]{人工验证 SQL}
+CREATE TABLE student_trace_demo_001(id INT, name VARCHAR(20));
+INSERT INTO student_trace_demo_001(id, name) VALUES(1, 'wang');
+INSERT INTO student_trace_demo_001(id, name) VALUES(2, 'li');
+SELECT id, name FROM student_trace_demo_001 WHERE id = 1;
+UPDATE student_trace_demo_001 SET name = 'newwang' WHERE id = 1;
+SELECT id, name FROM student_trace_demo_001 WHERE id = 1;
+DELETE FROM student_trace_demo_001 WHERE id = 2;
+SELECT id, name FROM student_trace_demo_001 WHERE id = 2;
+commit;
+exit;
+\end{dbcode}
+
+预期观察点如下：SELECT 语句会出现 Parse、Plan、Scan 和 Output Trace；UPDATE 与 DELETE 会出现更新命令和记录修改 Trace；删除后再次查询 \codepath{id = 2} 时，可以观察 \codepath{result rows: 0}；\codepath{commit;} 会出现事务 Trace。
+
+\begin{table}[htbp]
+  \centering
+  \caption{人工验证覆盖表}
+  \label{tab:trace-manual-coverage}
+  \begin{tabularx}{\textwidth}{l Y}
+    \toprule
+    验证内容 & 观察点 \\
+    \midrule
+    Trace 开关 & 使用 \codepath{--trace} 启动，或在交互中使用 \codepath{trace on;}、\codepath{trace off;}、\codepath{trace;}。\\
+    SELECT 主链路 & 观察 \codepath{TRACE_PARSE}、\codepath{TRACE_PLAN}、\codepath{TRACE_SCAN} 和 \codepath{TRACE_OUTPUT}。\\
+    更新执行 & 观察 \codepath{TRACE_UPDATE}、\codepath{TRACE_PLANNER}、\codepath{TRACE_METADATA}、\codepath{TRACE_RECORD}。\\
+    空结果查询 & 删除记录后再次查询，观察 \codepath{result rows: 0}。\\
+    事务命令 & 使用 \codepath{commit;} 或 \codepath{rollback;}，观察 \codepath{TRACE_TX}。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{演示注意事项}
+\label{sec:trace-notes}
+
+当前 \codepath{main.c} 使用固定数据库名 \codepath{Show2}。系统启动时会恢复已有数据库，因此重复运行同一个 demo 表名可能读到旧数据或旧记录。演示时建议每次使用新的表名，例如 \codepath{student_trace_demo_001}、\codepath{student_trace_demo_002}，或者在独立工作目录中运行程序。这不是 Trace bug，而是已有数据库恢复行为造成的演示现象。
+
+还要注意，当前系统目录中的名称字段有固定长度。如果人工演示时遇到长表名、长索引名被截断的现象，可以改用更短的表名继续观察 Trace 主链路。
+
+\section{配套验证说明}
+\label{sec:trace-validation-note}
+
+本章不新增自动 CTest。原因有三点：第一，Trace 属于 CLI 交互式输出，自动化测试需要同时处理输入、输出捕获、工作目录和退出路径；第二，自动启动 \codepath{NewDBMS.exe} 曾出现挂住和资源占用风险；第三，第8、9、10章已经分别通过 \codepath{ParseBasicTest}、\codepath{PlanScanBasicTest}、\codepath{UpdateBasicTest} 验证了解析、查询计划/扫描和更新执行核心链路。
+
+因此，本章采用人工验证方式。读者完成演示后，只需要确认 Trace 标签和 SQL 执行链路能够对应起来即可。
+
+\section{关键代码讲解}
+\label{sec:trace-code}
+
+第一段代码来自 \codepath{trace/DBTrace.c}。Trace 默认关闭，只有启用后 \codepath{DBTraceLog} 才会输出 \codepath{[TRACE_*]} 行。
+
+\begin{dbcode}{DBTraceLog 的输出封装}
+void DBTraceLog(const char *stage, const char *message) {
+    if (!g_trace_enabled) {
+        return;
+    }
+
+    printf("[TRACE_%s] ", stage ? stage : "GENERAL");
+    for (int i = 0; i < g_trace_indent; i++) {
+        printf("  ");
+    }
+    printf("%s\n", message ? message : "");
+}
+\end{dbcode}
+
+第二段代码来自 \codepath{main.c}。启动参数 \codepath{--trace} 会在程序启动时打开 Trace；交互命令 \codepath{trace on/off/trace} 则用于运行时切换或查看状态。
+
+\begin{dbcode}{main.c 中的 Trace 开关}
+for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--trace") == 0) {
+        DBTraceEnable();
+    }
+}
+
+/* 交互命令分支 */
+DBTraceEnable();
+printf("Trace mode enabled.\n");
+DBTraceDisable();
+printf("Trace mode disabled.\n");
+printf("Trace mode is %s.\n", DBTraceIsEnabled() ? "on" : "off");
+\end{dbcode}
+
+第三段代码来自 \codepath{plan/Planner.c} 和 \codepath{plan/BasicQueryPlanner.c}。SELECT 查询在解析后输出 \codepath{QueryData}，生成最终 ProjectPlan 后输出 Plan tree。
+
+\begin{dbcode}{查询链路中的 Trace 调用}
+QueryData*data = ParserQuery(parser);
+QueryDataTrace(data);
+return BasicQueryPlannerCreatPlan(planner->queryPlanner,data,transaction);
+
+ProjectPlan*projectPlan = ProjectPlanInit(p,queryData->fields);
+p = PlanInit(projectPlan,PLAN_PROJECT_CODE);
+PlanTraceTree(p);
+\end{dbcode}
+
+第四段代码来自 \codepath{plan/BasicUpdatePlanner.c} 和 \codepath{tx/Transaction.c}。更新命令和事务命令在入口处输出命令级过程 Trace。
+
+\begin{dbcode}{更新与事务链路中的 Trace 调用}
+int BasicUpdatePlannerExecuteInsert(BasicUpdatePlanner *planner,
+                                    InsertData *data,
+                                    Transaction*transaction){
+    UpdateExecutionTraceInsert(data);
+    /* 后续打开 TablePlan / Scan 并插入记录 */
+}
+
+void TransactionCommit(Transaction*transaction){
+    TransactionTraceCommit(transaction);
+    RecoveryCommit(transaction->recoveryManager);
+    printf("transaction %d commit\n",transaction->txNum);
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:trace-run-observe}
+
+运行时先观察普通 SQL 输出，再观察额外的 Trace 行。普通输出包括查询表格、命令影响行数和事务提交信息；Trace 输出则以 \codepath{[TRACE_*]} 开头，用于解释这些普通输出背后的内部过程。
+
+\begin{table}[htbp]
+  \centering
+  \caption{普通模式与 Trace 模式对照}
+  \label{tab:trace-normal-vs-trace}
+  \begin{tabularx}{\textwidth}{l Y Y}
+    \toprule
+    模式 & 输出内容 & 适用场景 \\
+    \midrule
+    普通模式 & 只显示查询结果、命令执行结果和事务提示。 & 日常运行、验证 SQL 结果。\\
+    Trace 模式 & 在普通输出之外增加解析、计划、扫描、更新、事务和输出阶段摘要。 & 教学、调试、演示执行链路。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+观察时可以按标签回到对应章节：看到 \codepath{TRACE_PARSE} 时回看第8章，看到 \codepath{TRACE_PLAN} 和 \codepath{TRACE_SCAN} 时回看第9章，看到 \codepath{TRACE_UPDATE} 和 \codepath{TRACE_PLANNER} 时回看第10章，看到 \codepath{TRACE_TX} 时回看第5章。
 
 \section{思考题}
-TODO
+\label{sec:trace-questions}
+
+\begin{enumerate}
+  \item Trace 为什么要默认关闭？
+  \item Trace 与 \codepath{LogManager} 管理的数据库日志有什么区别？
+  \item 为什么 Trace 不应该改变 SQL 的执行结果？
+  \item 如果未来要做 Web 或 GUI 可视化，需要在 Trace 信息中增加哪些结构化字段？
+\end{enumerate}
