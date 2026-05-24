@@ -2,16 +2,310 @@
 \label{chap:plan-scan}
 
 \section{实验目的}
-TODO：本章将在补充并通过对应 CTest 后完善。
+\label{sec:plan-scan-purpose}
+
+本章用于理解 SQL 解析之后，DBMS\_C 如何把 \codepath{QueryData} 转换为查询计划，再由查询计划打开为运行期扫描器，最终逐条读取满足条件的记录。第8章已经说明 Parser 只负责把 SQL 文本转换为结构化 Data 对象；本章继续向后走一步，观察 SELECT 查询如何经过 \codepath{BasicQueryPlanner} 生成 \codepath{Plan}，再由 \codepath{Plan.open} 生成 \codepath{Scan}。
+
+本章仍然只讨论 SELECT 查询主链路，不展开 INSERT、UPDATE、DELETE、CREATE TABLE、CREATE VIEW、CREATE INDEX 等更新执行路径。那些命令会在第10章“更新执行实验”中单独讨论。
+
+\section{Plan/Scan 在 SQL 执行链路中的位置}
+\label{sec:plan-scan-position}
+
+Plan/Scan 位于 SQL 解析和实际记录访问之间。Parser 产出的 \codepath{QueryData} 只说明“查哪些字段、查哪些表、有什么条件”；\codepath{BasicQueryPlanner} 根据这些信息构造 Plan 树；当执行阶段真正需要读取数据时，再调用 Plan 的 \codepath{open} 函数生成 Scan 链。Scan 链负责逐条推进记录，并通过 \codepath{next/getInt/getString/getVal} 等接口取出当前记录字段。
+
+图 \ref{fig:plan-scan-position} 展示本章在主链路中的位置。注意，本章的测试会直接准备表和记录，然后通过 Planner 执行 SELECT 查询验证结果。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.94\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 13mm]
+    \node[dblevel] (sql) {SQL SELECT};
+    \node[dbnode, right=of sql] (querydata) {QueryData\\fields, tables, predicate};
+    \node[dbnode, right=of querydata] (planner) {BasicQueryPlanner\\生成 Plan 树};
+    \node[dbnode, below=of planner] (plan) {Plan\\描述怎么查};
+    \node[dbnode, left=of plan] (scan) {Scan\\运行期迭代};
+    \node[dbsubnode, left=of scan] (record) {Record / TableScan\\逐条读取记录};
+
+    \draw[dbarrow] (sql) -- (querydata);
+    \draw[dbarrow] (querydata) -- (planner);
+    \draw[dbdown] (planner) -- (plan);
+    \draw[dbarrow] (plan) -- node[above,font=\footnotesize]{open} (scan);
+    \draw[dbarrow] (scan) -- node[above,font=\footnotesize]{next/get} (record);
+  \end{tikzpicture}}
+  \caption{Plan/Scan 在 SELECT 执行链路中的位置}
+  \label{fig:plan-scan-position}
+\end{figure}
+
+\section{模块作用}
+\label{sec:plan-scan-role}
+
+\codepath{BasicQueryPlanner} 是当前基础查询计划器。它接收 \codepath{QueryData}，为每个表创建 \codepath{TablePlan}；如果存在多张表，则用 \codepath{ProductPlan} 组合；随后用 \codepath{SelectPlan} 包装谓词筛选；最后用 \codepath{ProjectPlan} 包装字段投影。
+
+\codepath{Plan} 表示尚未执行的查询计划，核心是函数指针集合和类型码。不同 Plan 通过统一接口提供 \codepath{open}、\codepath{blocksAccessed}、\codepath{recordsOutput}、\codepath{distinctValues} 和 \codepath{schema}。其中 \codepath{open} 是从计划进入运行期扫描的关键入口。
+
+\codepath{Scan} 表示运行期记录迭代器。它同样通过统一函数指针隐藏不同扫描器的差异，例如 \codepath{TableScan} 访问真实表记录，\codepath{SelectScan} 过滤记录，\codepath{ProjectScan} 限制可见字段，\codepath{ProductScan} 组合两路扫描结果。
 
 \section{相关源码文件}
-TODO
+\label{sec:plan-scan-source-files}
+
+表 \ref{tab:plan-scan-source-files} 列出本章直接涉及的真实源码文件。建议先阅读 \codepath{Planner.c} 和 \codepath{BasicQueryPlanner.c}，再阅读各类 Plan 的 \codepath{Open} 函数，最后观察 Scan 层如何通过统一接口向下转发。
+
+\begin{longtable}{>{\ttfamily}p{0.38\textwidth} p{0.54\textwidth}}
+  \caption{Plan/Scan 相关源码文件}
+  \label{tab:plan-scan-source-files}\\
+  \toprule
+  文件 & 本章关注点 \\
+  \midrule
+  \endfirsthead
+  \caption[]{Plan/Scan 相关源码文件（续）}\\
+  \toprule
+  文件 & 本章关注点 \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+  plan/Planner.h, plan/Planner.c & 查询计划入口 \apiname{PlannerCreateQueryPlan}，把 SQL 文本解析为 QueryData 并转交查询计划器。\\
+  plan/BasicQueryPlanner.h, plan/BasicQueryPlanner.c & 根据 QueryData 构造 TablePlan、ProductPlan、SelectPlan、ProjectPlan。\\
+  plan/Plan.h, plan/Plan.c & Plan 类型码、union 和 open/schema 等统一函数指针。\\
+  plan/TablePlan.h, plan/TablePlan.c & 单表访问计划，打开后生成 TableScan 包装。\\
+  plan/SelectPlan.h, plan/SelectPlan.c & 条件选择计划，打开后生成 SelectScan。\\
+  plan/ProjectPlan.h, plan/ProjectPlan.c & 字段投影计划，打开后生成 ProjectScan。\\
+  plan/ProductPlan.h, plan/ProductPlan.c & 多表乘积计划，打开后生成 ProductScan。\\
+  query/Scan.h, query/Scan.c & Scan 统一接口和不同扫描器的函数指针绑定。\\
+  query/SelectScan.c, query/ProjectScan.c, query/ProductScan.c & 运行期筛选、投影、多表组合扫描逻辑。\\
+  query/Predicate.c, query/Term.c, query/Expression.c, query/Constant.c & WHERE 条件判断所需的谓词、表达式和常量逻辑。\\
+  record/TableScan.h, record/TableScan.c & 表记录扫描，提供真实记录的插入、next、getInt、getString 等接口。\\
+\end{longtable}
+
+\section{Plan 与 Scan 的区别}
+\label{sec:plan-vs-scan}
+
+Plan 和 Scan 是本章最重要的一组概念。Plan 更像“查询方案”，描述要访问哪些表、如何筛选、如何投影，以及估算信息；Scan 更像“执行游标”，已经绑定到底层记录，能够逐条向前推进。表 \ref{tab:plan-scan-compare} 对比二者职责。
+
+\begin{table}[htbp]
+  \centering
+  \caption{Plan 与 Scan 职责对照}
+  \label{tab:plan-scan-compare}
+  \begin{tabularx}{\textwidth}{l Y Y}
+    \toprule
+    对象 & 职责 & 典型接口 \\
+    \midrule
+    \codepath{Plan} & 描述“怎么查”，尚未逐条读取记录；可以暴露 schema 和估算信息。 & \codepath{open}、\codepath{schema}、\codepath{recordsOutput}、\codepath{blocksAccessed}\\
+    \codepath{Scan} & 执行“正在查”，通过游标式接口逐条推进并读取字段值。 & \codepath{next}、\codepath{getInt}、\codepath{getString}、\codepath{getVal}、\codepath{hasField}\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{SELECT 查询计划生成流程}
+\label{sec:plan-scan-select-flow}
+
+以本章测试中的 SQL 为例：
+
+\begin{dbcode}[listing options={language=SQL}]{本章 SELECT 示例}
+select id, name from student_plan where id = 1
+\end{dbcode}
+
+该语句经过 Parser 后得到 \codepath{QueryData}，其中字段列表为 \codepath{id,name}，表名列表为 \codepath{student_plan}，谓词为 \codepath{id = 1}。随后 \codepath{BasicQueryPlannerCreatPlan} 按照图 \ref{fig:querydata-to-plan-tree} 的顺序构造 Plan 树。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.78\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 12mm]
+    \node[dblevel] (query) {QueryData\\student\_plan, id=1};
+    \node[dbnode, below=of query] (table) {TablePlan\\table=student\_plan};
+    \node[dbnode, below=of table] (select) {SelectPlan\\predicate=id=1};
+    \node[dbnode, below=of select] (project) {ProjectPlan\\fields=id,name};
+
+    \draw[dbdown] (query) -- (table);
+    \draw[dbdown] (table) -- (select);
+    \draw[dbdown] (select) -- (project);
+  \end{tikzpicture}}
+  \caption{QueryData 到 Plan 树的结构}
+  \label{fig:querydata-to-plan-tree}
+\end{figure}
+
+打开 Plan 后，会形成对应的 Scan 链。图 \ref{fig:plan-tree-to-scan-chain} 展示了当前测试中最外层 ProjectPlan 打开后如何逐层调用内部 Plan 的 open 函数。测试不直接访问 \codepath{ProjectScan} 或 \codepath{SelectScan} 的内部字段，而是通过公开的 \codepath{Scan} 接口验证结果。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.84\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 13mm]
+    \node[dblevel] (pp) {ProjectPlan};
+    \node[dbnode, below=of pp] (sp) {SelectPlan};
+    \node[dbnode, below=of sp] (tp) {TablePlan};
+    \node[dbnode, right=of pp] (ps) {ProjectScan};
+    \node[dbnode, below=of ps] (ss) {SelectScan};
+    \node[dbnode, below=of ss] (ts) {TableScan};
+
+    \draw[dbdown] (pp) -- (sp);
+    \draw[dbdown] (sp) -- (tp);
+    \draw[dbarrow] (pp) -- node[above,font=\footnotesize]{open} (ps);
+    \draw[dbarrow] (sp) -- node[above,font=\footnotesize]{open} (ss);
+    \draw[dbarrow] (tp) -- node[above,font=\footnotesize]{open} (ts);
+    \draw[dbdown] (ps) -- (ss);
+    \draw[dbdown] (ss) -- (ts);
+  \end{tikzpicture}}
+  \caption{Plan 树到 Scan 链的映射}
+  \label{fig:plan-tree-to-scan-chain}
+\end{figure}
+
+图 \ref{fig:select-execution-path} 进一步把测试准备、计划生成、扫描执行串起来。测试先创建 \codepath{student_plan(id int, name varchar(20))}，直接通过 \codepath{TableScan} 插入两条记录，然后用 Planner 查询 \codepath{id = 1} 的记录。这里直接使用 TableScan 准备数据，是为了避免提前使用第10章才讨论的 INSERT 执行路径。
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm and 10mm]
+    \node[dblevel] (prep) {测试准备\\建表并插入两条记录};
+    \node[dbnode, right=of prep] (sql) {SELECT\\id,name where id=1};
+    \node[dbnode, right=of sql] (plan) {PlannerCreateQueryPlan};
+    \node[dbnode, below=of plan] (open) {plan->open(plan)};
+    \node[dbnode, left=of open] (scan) {ScanNext / getInt / getString};
+    \node[dbsubnode, left=of scan] (asserts) {断言\\id=1, name=wang\\无第二条结果};
+
+    \draw[dbarrow] (prep) -- (sql);
+    \draw[dbarrow] (sql) -- (plan);
+    \draw[dbdown] (plan) -- (open);
+    \draw[dbarrow] (open) -- (scan);
+    \draw[dbarrow] (scan) -- (asserts);
+  \end{tikzpicture}}
+  \caption{SELECT 示例执行链路}
+  \label{fig:select-execution-path}
+\end{figure}
 
 \section{配套测试}
-TODO：先补充测试，再撰写本章内容。
+\label{sec:plan-scan-test}
 
-\section{实验内容}
-TODO
+本章新增并注册了配套测试文件：
+
+\begin{itemize}
+  \item \codepath{test/plan/PlanScanBasicTest.c}
+\end{itemize}
+
+测试使用独立数据库目录，目录名以 \codepath{plan_scan_basic_test_db} 开头，并包含进程号和用例计数。每个用例创建 FileManager、LogManager、BufferManager、Transaction 和 MetadataManager；随后创建表 \codepath{student_plan(id int, name varchar(20))}，通过 TableScan 插入 \codepath{(1, "wang")} 和 \codepath{(2, "li")}。查询语句只选择 \codepath{id = 1}，因此期望只读回第一条记录。
+
+\begin{table}[htbp]
+  \centering
+  \caption{PlanScanBasicTest 覆盖内容}
+  \label{tab:plan-scan-tests}
+  \begin{tabularx}{\textwidth}{l Y}
+    \toprule
+    测试函数 & 主要断言 \\
+    \midrule
+    \codepath{test_basic_query_planner_select_project_scan} & 断言 Plan 非空；最外层 Plan 为 \codepath{PLAN_PROJECT_CODE}；内部依次为 \codepath{PLAN_SELECT_CODE} 和 \codepath{PLAN_TABLE_CODE}；open 后 Scan 非空且最外层为 \codepath{SCAN_PROJECT_CODE}；通过公开 Scan 接口读回 \codepath{id=1,name=wang}，并断言没有第二条匹配结果。\\
+    \codepath{test_plan_open_returns_scan_for_query_result} & 断言 Plan 非空；open 返回 Scan 非空；Scan 最外层为 \codepath{SCAN_PROJECT_CODE}；通过 \codepath{hasField/next/getInt/getString} 验证查询结果，不访问 ProjectScan 或 SelectScan 内部字段。\\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+本章测试已在 \codepath{build-plancheck} 中验证通过。单独运行本章测试：
+
+\begin{dbcode}[listing options={language=bash}]{运行 PlanScanBasicTest}
+ctest --test-dir build-plancheck --output-on-failure -R PlanScanBasicTest
+\end{dbcode}
+
+运行 Plan 相关测试：
+
+\begin{dbcode}[listing options={language=bash}]{运行 Plan 相关测试}
+ctest --test-dir build-plancheck --output-on-failure -R Plan
+\end{dbcode}
+
+\section{关键代码讲解}
+\label{sec:plan-scan-code}
+
+第一段代码来自 \codepath{plan/Planner.c} 的 \apiname{PlannerCreateQueryPlan}。它先调用 Parser 得到 \codepath{QueryData}，再把 QueryData 交给基础查询计划器。
+
+\begin{dbcode}{PlannerCreateQueryPlan 查询计划入口}
+Plan* PlannerCreateQueryPlan(Planner*planner,CString*qry,Transaction*transaction){
+    Parser *parser = ParserInit(CStringGetPtr(qry));
+    QueryData*data = ParserQuery(parser);
+    QueryDataTrace(data);
+    return BasicQueryPlannerCreatPlan(planner->queryPlanner,data,transaction);
+}
+\end{dbcode}
+
+第二段代码来自 \codepath{plan/BasicQueryPlanner.c}。当前基础计划器为每张表创建 \codepath{TablePlan}，多表时用 \codepath{ProductPlan} 合并，然后统一包上 \codepath{SelectPlan} 和 \codepath{ProjectPlan}。
+
+\begin{dbcode}{BasicQueryPlannerCreatPlan 的计划包装顺序}
+Plan *p = CListRemoveByIndex(plans,0);
+CListNode *head = plans->head;
+while(head){
+    Plan*nextPlan = ((Plan *)head->data);
+    ProductPlan *productPlan = ProductPlanInit(p,nextPlan);
+    p = PlanInit(productPlan,PLAN_PRODUCT_CODE);
+    head=head->next;
+}
+SelectPlan*selectPlan = SelectPlanInit(p,queryData->predicate);
+p = PlanInit(selectPlan,PLAN_SELECT_CODE);
+ProjectPlan*projectPlan = ProjectPlanInit(p,queryData->fields);
+p = PlanInit(projectPlan,PLAN_PROJECT_CODE);
+\end{dbcode}
+
+第三段代码来自 \codepath{plan/ProjectPlan.c} 的 \apiname{ProjectPlanOpen}。它先打开内部 Plan 得到下层 Scan，再用字段列表创建 \codepath{ProjectScan}，最后包装为统一的 \codepath{Scan}。
+
+\begin{dbcode}{ProjectPlanOpen 创建 ProjectScan}
+Scan* ProjectPlanOpen(void *data){
+    Plan*plan = (Plan*)data;
+    ProjectPlan * projectPlan = plan->planUnion.projectPlan;
+    Scan *s1 = projectPlan->p->open(projectPlan->p);
+
+    CList *fieldlist = CListInit(NULL, CStringListEquals, NULL);
+    Schema* schema = projectPlan->schema;
+    FieldNode *current = schema->fields;
+    while (current) {
+        CString *fldname = CStringCreateFromCString(current->fileName);
+        CListAppend(fieldlist, fldname);
+        current = current->next;
+    }
+    ProjectScan *projectScan = ProjectScanInit(s1, fieldlist);
+    Scan *scan = ScanInit(projectScan, SCAN_PROJECT_CODE);
+    return scan;
+}
+\end{dbcode}
+
+第四段代码来自 \codepath{query/SelectScan.c} 的 \apiname{SelectScanNext}。它持续推进内部 Scan，直到找到满足谓词的记录或扫描结束。
+
+\begin{dbcode}{SelectScanNext 过滤记录}
+bool SelectScanNext(void *data){
+    Scan*scan = (Scan*)data;
+    SelectScan *selectScan = scan->scanUnion.selectScan;
+    while (selectScan->s->next(selectScan->s)){
+        if(PredicateIsSatisfied(selectScan->predicate,selectScan->s)){
+            return true;
+        }
+    }
+    return false;
+}
+\end{dbcode}
+
+\section{运行与观察}
+\label{sec:plan-scan-run}
+
+本章测试验证命令如下：
+
+\begin{dbcode}[listing options={language=bash}]{build-plancheck 中验证 Plan/Scan 测试}
+mingw32-make -C build-plancheck PlanScanBasicTest -j8 SHELL=cmd.exe
+ctest --test-dir build-plancheck --output-on-failure -R PlanScanBasicTest
+ctest --test-dir build-plancheck --output-on-failure -R Plan
+\end{dbcode}
+
+观察测试输出时，可以重点看以下问题：
+
+\begin{enumerate}
+  \item \codepath{PlannerCreateQueryPlan} 是否能根据 SELECT SQL 返回非空 Plan。
+  \item 最外层 Plan 是否为 \codepath{PLAN_PROJECT_CODE}，说明字段投影位于计划树最外层。
+  \item 计划树中是否能看到 \codepath{ProjectPlan -> SelectPlan -> TablePlan} 的基本结构。
+  \item \codepath{plan->open(plan)} 是否能返回非空 Scan。
+  \item 通过公开 Scan 接口是否只能读回 \codepath{id = 1} 的 \codepath{wang}，而不会读出 \codepath{id = 2} 的 \codepath{li}。
+  \item 当前测试为什么不直接访问 \codepath{ProjectScan} 或 \codepath{SelectScan} 的内部字段：这些类型在公开头文件中是不完整类型，本章应通过统一 Scan 接口观察行为。
+\end{enumerate}
 
 \section{思考题}
-TODO
+\label{sec:plan-scan-questions}
+
+\begin{enumerate}
+  \item 为什么 DBMS\_C 不直接执行 \codepath{QueryData}，而要先构造 Plan？
+  \item Plan 和 Scan 的区别是什么？如果把二者合并，会失去哪些表达能力？
+  \item 为什么 \codepath{ProjectPlan} 通常位于计划树最外层？
+  \item \codepath{ProductPlan} 为什么可能导致记录数迅速增多？
+  \item 如果要优化多表查询顺序，应该改进 Parser、Plan 还是 Scan？为什么？
+\end{enumerate}
