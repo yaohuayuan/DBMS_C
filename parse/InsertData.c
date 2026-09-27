@@ -3,9 +3,9 @@
 //
 
 #include "InsertData.h"
-#include "List.h"
+#include "CList.h"
 #include "CString.h"
-InsertData *InsertDataInit(CString *tblname,List *fld,List *vals){
+InsertData *InsertDataInit(CString *tblname,CList *fld,CList *vals){
     InsertData *insertData = malloc(sizeof(InsertData));
     insertData->tblname = CStringCreateFromCString(tblname);
     insertData->flds = fld;

@@ -10,11 +10,11 @@ typedef struct LogIterator LogIterator;
  * @brief LogManager 结构体定义，用于管理日志文件。
  */
 typedef struct {
-    CString *logFile;            ///< 日志文件的路径
+    CString *logFile; ///< 日志文件的路径
     FileManager *fileManager; ///< 指向文件管理器的指针，用于管理文件操作
-    Page *logPage;            ///< 当前页的数据缓冲区
+    Page *logPage; ///< 当前页的数据缓冲区
     BlockID *currentBlockId;   ///< 当前处理的日志块ID
-    int latestLSN;            ///< 最新的日志序列号 (Log Sequence Number)
+    int latestLSN; ///< 最新的日志序列号 (Log Sequence Number)
     int LastSavedLSN;         ///< 上次保存的日志序列号
 } LogManager;
 
@@ -70,9 +70,9 @@ void LogManagerFlushLSN(LogManager *logManager, int lsn);
 int LogManagerAppend(LogManager *logManager,const uint8_t *data,  uint32_t size);
 
 typedef struct LogIterator {
-    FileManager *fm;         ///< 指向文件管理器的指针，用于管理文件操作
+    FileManager *fm; ///< 指向文件管理器的指针，用于管理文件操作
     BlockID *blockId;         ///< 当前处理的日志块ID
-    Page *page;              ///< 当前页的数据缓冲区
+    Page *page; ///< 当前页的数据缓冲区
     int currentPos;          ///< 当前读取位置
     int boundary;            ///< 当前页的有效数据边界
 } LogIterator;

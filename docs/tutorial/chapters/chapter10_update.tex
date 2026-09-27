@@ -106,12 +106,12 @@
     \toprule
     命令类型 & 执行函数 & 主要动作 \\
     \midrule
-    \codepath{CMD_CREATE_TABLE} & \codepath{BasicUpdatePlannerExecuteCreateTable} & 调用 \codepath{MetadataMgrCreateTable} 登记表结构。\\
+    \codepath{CMD_CREATE_TABLE} & \codepath{BasicUpdatePlannerExecuteCreateTable} & 调用元数据管理器登记表结构。\\
     \codepath{CMD_INSERT_DATA} & \codepath{BasicUpdatePlannerExecuteInsert} & 打开表扫描，插入新 slot，并按字段写入值。\\
     \codepath{CMD_MODIFY_DATA} & \codepath{BasicUpdatePlannerExecuteModify} & 使用 SelectPlan 定位匹配记录，计算新值并调用 \codepath{setVal}。\\
     \codepath{CMD_DELETE_DATA} & \codepath{BasicUpdatePlannerExecuteDelete} & 使用 SelectPlan 定位匹配记录，并调用 \codepath{delete}。\\
     \codepath{CMD_CREATE_VIEW} & \codepath{BasicUpdatePlannerExecuteCreateView} & 将 \codepath{QueryData} 转为视图定义字符串并登记到 \codepath{viewcat}。\\
-    \codepath{CMD_CREATE_INDEX} & \codepath{BasicUpdatePlannerExecuteCreateIndex} & 调用 \codepath{MetadataMgrCreateIndex} 登记索引信息到 \codepath{idxcat}。\\
+    \codepath{CMD_CREATE_INDEX} & \codepath{BasicUpdatePlannerExecuteCreateIndex} & 调用元数据管理器登记索引信息到 \codepath{idxcat}。\\
     \bottomrule
   \end{tabularx}
 \end{table}

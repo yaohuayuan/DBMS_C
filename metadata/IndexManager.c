@@ -73,14 +73,14 @@ map_IndexInfo_t* IndexMgrGetIndexInfo(IndexManager *indexMgr, CString *tblname, 
     Scan *scan = ScanInit(ts, SCAN_TABLE_CODE);
 
     while (TableScanNext(scan)) {
-        char *currentTblNameStr = TableScanGetString(scan, tablenameParam);
+        const char *currentTblNameStr = TableScanGetString(scan, tablenameParam);
         CString *currentTblName = CStringCreateFromCStr(currentTblNameStr);
         if (CStringEqual(currentTblName, tblname)) {
-            char *idxnameStr = TableScanGetString(scan, indexnameParam);
-            char *fldnameStr = TableScanGetString(scan, fieldnameParam);
+            const char *idxnameStr = TableScanGetString(scan, indexnameParam);
+            const char *fldnameStr = TableScanGetString(scan, fieldnameParam);
 
             Layout *tblLayout = TableManagerGetLayout(indexMgr->tableManager, tblname, tx);
-            StatInfo *tblStatInfo = StartManagerGetStatInfo(indexMgr->statManager, CStringGetPtr(tblname), tblLayout, tx);
+            StatInfo *tblStatInfo = StatManagerGetStatInfo(indexMgr->statManager, CStringGetPtr(tblname), tblLayout, tx);
             IndexInfo *indexInfo = IndexInfoInit(idxnameStr, fldnameStr, tblLayout->schema, tx, tblStatInfo);
 
             map_set(result, fldnameStr, *indexInfo);

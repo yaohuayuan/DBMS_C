@@ -5,8 +5,6 @@
 #include "Term.h"
 #include "Plan.h"
 #include "math.h"
-#define max(a, b) ((a) > (b) ? (a) : (b))
-
 Term *TermInit(Expression*lhs,Expression*rhs,CompareOp op){
     Term *term = malloc(sizeof (Term));
     term->lhs = lhs;

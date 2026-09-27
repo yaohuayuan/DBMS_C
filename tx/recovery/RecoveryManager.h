@@ -24,7 +24,7 @@ void RecoveryCommit(RecoveryManager *recoveryManager);
 void RecoveryDoRollback(RecoveryManager*recoveryManager);
 void RecoveryRollback(RecoveryManager*recoveryManager);
 int RecoverySetInt(RecoveryManager*recoveryManager,Buffer*buffer,int offset,int newVal);
-int RecoverySetString(RecoveryManager*recoveryManager,Buffer*buffer,int offset,char* newVal);
+int RecoverySetString(RecoveryManager*recoveryManager,Buffer*buffer,int offset,const char* newVal);
 void RecoveryDoRecover(RecoveryManager*recoveryManager);
 void RecoveryRecovery(RecoveryManager*recoveryManager);
 #endif //DBMS_C_RECOVERYMANAGER_H

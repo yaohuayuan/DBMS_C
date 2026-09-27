@@ -21,7 +21,7 @@ CString* BlockID2CString(BlockID *b) {
     CString *CStr = CStringCreateFromCString(b->fileName);
     CStringAppendCStr(CStr, ": ");
     char numStr[20];
-    snprintf(numStr, sizeof(numStr), "%d", b->BlockID);  // 格式化 BlockID 为字符串
+    snprintf(numStr, sizeof(numStr), "%d", b->BlockID); // 格式化 BlockID 为字符串
     CString *blockIDStr = CStringCreateFromCStr(numStr);
     CStringAppendCString(CStr, blockIDStr);
     CStringDestroy(blockIDStr);

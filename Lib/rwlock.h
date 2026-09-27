@@ -70,8 +70,8 @@ typedef pthread_rwlock_t RWLock;
  *
  * @param lock 指向要初始化的 RWLock 结构体的指针。
  */
-static inline void RwLockInit(RWLock* lock) { 
-    pthread_rwlock_init(lock, NULL); 
+static inline void RwLockInit(RWLock* lock) {
+    pthread_rwlock_init(lock, NULL);
 }
 
 /**
@@ -79,8 +79,8 @@ static inline void RwLockInit(RWLock* lock) {
  *
  * @param lock 指向 RWLock 结构体的指针。
  */
-static inline void RwLockReadLock(RWLock* lock) { 
-    pthread_rwlock_rdlock(lock); 
+static inline void RwLockReadLock(RWLock* lock) {
+    pthread_rwlock_rdlock(lock);
 }
 
 /**
@@ -88,8 +88,8 @@ static inline void RwLockReadLock(RWLock* lock) {
  *
  * @param lock 指向 RWLock 结构体的指针。
  */
-static inline void RwLockWriteLock(RWLock* lock) { 
-    pthread_rwlock_wrlock(lock); 
+static inline void RwLockWriteLock(RWLock* lock) {
+    pthread_rwlock_wrlock(lock);
 }
 
 /**
@@ -97,8 +97,8 @@ static inline void RwLockWriteLock(RWLock* lock) {
  *
  * @param lock 指向 RWLock 结构体的指针。
  */
-static inline void RwLockUnlockRead(RWLock* lock) { 
-    pthread_rwlock_unlock(lock); 
+static inline void RwLockUnlockRead(RWLock* lock) {
+    pthread_rwlock_unlock(lock);
 }
 
 /**
@@ -106,8 +106,8 @@ static inline void RwLockUnlockRead(RWLock* lock) {
  *
  * @param lock 指向 RWLock 结构体的指针。
  */
-static inline void RwLockUnlockWrite(RWLock* lock) { 
-    pthread_rwlock_unlock(lock); 
+static inline void RwLockUnlockWrite(RWLock* lock) {
+    pthread_rwlock_unlock(lock);
 }
 
 /**
@@ -115,8 +115,8 @@ static inline void RwLockUnlockWrite(RWLock* lock) {
  *
  * @param lock 指向要销毁的 RWLock 结构体的指针。
  */
-static inline void RwLockDestroy(RWLock* lock) { 
-    pthread_rwlock_destroy(lock); 
+static inline void RwLockDestroy(RWLock* lock) {
+    pthread_rwlock_destroy(lock);
 }
 
 #endif

@@ -37,7 +37,7 @@ typedef struct SetIntRecord {
 
 typedef struct SetStringRecord {
     int TxNum, Offset;
-    char *Val;
+    const char *Val;
     BlockID* BlockId;
 } SetStringRecord;
 typedef struct CheckpointRecord {

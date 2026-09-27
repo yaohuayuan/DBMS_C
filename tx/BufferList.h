@@ -13,15 +13,15 @@
  * @brief BlockIDNode 结构体，用于表示BlockID的链表节点。
  */
 typedef struct BlockIDNode{
-    BlockID *blockId;  ///< 指向BlockID的指针
-    struct BlockIDNode* next;  ///< 指向下一个BlockIDNode的指针
+    BlockID *blockId; ///< 指向BlockID的指针
+    struct BlockIDNode* next; ///< 指向下一个BlockIDNode的指针
 }BlockIDNode;
 
 /**
  * @brief BufferTEMP 结构体，用于临时存储Buffer指针。
  */
 typedef struct BufferTEMP{
-    Buffer *buffer;  ///< 指向Buffer的指针
+    Buffer *buffer; ///< 指向Buffer的指针
 }BufferTEMP;
 
 /**
@@ -33,9 +33,9 @@ typedef  map_t(BufferTEMP) map_Buffer_t;
  * @brief BufferList 结构体，用于管理事务使用的缓冲区列表。
  */
 typedef struct BufferList{
-    map_Buffer_t *buffers;  ///< Buffer映射表
+    map_Buffer_t *buffers; ///< Buffer映射表
     BlockIDNode *pin;  ///< 固定的BlockID链表
-    BufferManager *bufferManager;  ///< 缓冲管理器
+    BufferManager *bufferManager; ///< 缓冲管理器
 }BufferList;
 
 /**

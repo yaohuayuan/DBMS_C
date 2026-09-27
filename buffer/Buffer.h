@@ -1,15 +1,13 @@
-//
-// Created by Lenovo on 2025/7/16.
-//
-
 #ifndef NEWDBMS_BUFFER_H
 #define NEWDBMS_BUFFER_H
 
+#include <stdbool.h>
+#include <time.h>
 #include "FileManager.h"
 #include "LogManager.h"
 #include "Page.h"
-#include "time.h"
-typedef struct Buffer{
+
+typedef struct Buffer {
     FileManager *fileManager;
     LogManager *logManager;
     Page *page;
@@ -19,7 +17,8 @@ typedef struct Buffer{
     int lsn;
     time_t lastUsed;   // 最近使用时间
     int frame_id;
-}Buffer;
+} Buffer;
+
 /**
  * 初始化一个新的 Buffer。
  *
@@ -80,4 +79,4 @@ void BufferUnPin(Buffer *buffer);
  */
 void BufferAssignToBlock(Buffer *buffer, BlockID *blockId);
 
-#endif //NEWDBMS_BUFFER_H
+#endif // NEWDBMS_BUFFER_H

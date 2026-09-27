@@ -4,7 +4,7 @@
 
 #ifndef NEWDBMS_LRUPOLICY_H
 #define NEWDBMS_LRUPOLICY_H
-#include"ReplacementPolicy.h"
+#include "ReplacementPolicy.h"
 /**
  * 创建一个新的 LRU 替换策略实例。
  *

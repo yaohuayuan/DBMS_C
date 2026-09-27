@@ -44,24 +44,43 @@
 \label{sec:file-page-objects}
 
 图 \ref{fig:file-page-objects} 展示了三个核心对象之间的关系。它们不是并列工具，而是一条从“定位”到“内存表示”再到“文件读写”的小链路。
-
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.88\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=12mm and 18mm]
-    \node[dblevel] (blockid) {BlockID\\文件名 + 块号};
-    \node[dblevel, right=of blockid] (page) {Page\\内存页缓冲};
-    \node[dblevel, right=of page] (fm) {FileManager\\块级文件访问};
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[
+    >=Latex,
+    node distance=12mm and 22mm,
+    every node/.style={align=center},
+    obj/.style={dblevel, minimum width=34mm, minimum height=10mm},
+    info/.style={dbsubnode, minimum width=34mm, minimum height=9mm}
+  ]
 
-    \node[dbsubnode, below=of blockid] (target) {确定目标文件块\\fileName, blockId};
-    \node[dbsubnode, below=of page] (buffer) {保存 page bytes\\读写 int/string};
-    \node[dbsubnode, below=of fm] (disk) {按 blockSize 计算偏移\\read/write/append};
+    % 第一层：核心对象
+    \node[obj] (blockid) {BlockID\\文件名 + 块号};
+    \node[obj, right=30mm of blockid] (page) {Page\\内存页缓冲};
+    \node[obj, right=30mm of page] (fm) {FileManager\\块级文件访问};
 
-    \draw[dbarrow] (blockid) -- node[above,font=\footnotesize] {定位} (fm);
-    \draw[dbarrow] (page) -- node[above,font=\footnotesize] {交换数据} (fm);
+    % 第二层：职责说明
+    \node[info, below=10mm of blockid] (target) {确定目标文件块\\fileName, blockId};
+    \node[info, below=10mm of page] (buffer) {保存 page bytes\\读写 int/string};
+    \node[info, below=10mm of fm] (disk) {按 blockSize 计算偏移\\read / write / append};
+
+    % 核心关系线
+    \draw[dbarrow]
+      (blockid.east) to[bend left=16]
+      node[above, sloped, font=\footnotesize] {定位目标块}
+      (fm.west);
+
+    \draw[dbarrow]
+      (page.east) to[bend right=14]
+      node[below, sloped, font=\footnotesize] {页数据交换}
+      (fm.west);
+
+    % 向下说明线
     \draw[dbdown] (blockid) -- (target);
     \draw[dbdown] (page) -- (buffer);
     \draw[dbdown] (fm) -- (disk);
+
   \end{tikzpicture}}
   \caption{BlockID、Page 与 FileManager 的职责关系}
   \label{fig:file-page-objects}
@@ -128,7 +147,7 @@
   \end{tabularx}
 \end{table}
 
-测试使用独立测试数据库目录，并在写读块和追加块用例中按进程号生成目录名，避免重复运行 CTest 时被上一次 Windows 文件句柄释放时机影响。测试会尝试在用例前后清理测试目录；如果 Windows 暂时保留目录句柄，后续测试也不会复用同名目录。
+测试使用独立测试数据库目录，并在写读块和追加块用例中按进程号生成目录名，避免重复运行 CTest 时被上一次 Windows 文件句柄释放时机影响。测试会尝试在用例前后清理测试目录；如果 Windows 暂时保留目录句柄，再次测试也不会复用同名目录。
 
 \section{关键代码讲解}
 \label{sec:file-page-code}
@@ -259,7 +278,7 @@ BlockID *FileManagerAppend(FileManager *fm, CString *filename) {
 \section{运行与观察}
 \label{sec:file-page-run}
 
-本章测试已经接入根目录 \codepath{CMakeLists.txt}。在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建和运行：
+本章测试已经接入项目根目录下的 \codepath{CMakeLists.txt}。进入项目根目录后，使用固定命令构建和运行：
 
 \begin{dbcode}[listing options={language=bash}]{构建并运行 File 相关测试}
 cmake -S . -B build
@@ -300,7 +319,7 @@ ctest --test-dir build --output-on-failure -R FileManagerBasicTest
   \label{fig:file-page-roundtrip}
 \end{figure}
 
-运行本章实验时，建议重点观察四件事：第一，\codepath{Page} 写入的数据是否能在同一页中读回；第二，\codepath{FileManagerWrite} 写入块后，另一个 \codepath{Page} 是否能从同一块读回相同内容；第三，\codepath{BlockID} 如何用文件名和块号确定目标位置；第四，这一层如何为后续 \codepath{BufferManager} 提供“读块、写块、追加块”的底座。
+运行本章实验时，建议重点观察四件事：第一，\codepath{Page} 写入的数据是否能在同一页中读回；第二，\codepath{FileManagerWrite} 写入块后，另一个 \codepath{Page} 是否能从同一块读回相同内容；第三，\codepath{BlockID} 如何用文件名和块号确定目标位置；第四，这一层如何为 \codepath{BufferManager} 提供“读块、写块、追加块”的底座。
 
 \section{思考题}
 \label{sec:file-page-questions}

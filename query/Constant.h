@@ -14,9 +14,9 @@
 typedef struct Constant{
     bool isInt; ///< 标记常量是否为整数类型
     union {
-        int ival;     ///< 整数值
+        int ival; ///< 整数值
         CString *sval; ///< 字符串值
-    } value;     ///< 常量的值
+    } value;           ///< 常量的值
 } Constant;
 
 /**

@@ -12,7 +12,7 @@
 #include "LogManager.h"
 #include "BlockId.h"
 #include "CString.h"
-#include"LRU/LRUPolicy.h"
+#include "LRU/LRUPolicy.h"
 /* ---------- 测试工具函数 ---------- */
 
 static FileManager* create_dummy_file_manager(void) {

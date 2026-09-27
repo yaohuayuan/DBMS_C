@@ -11,7 +11,7 @@
  * @brief RecordCode 枚举，定义了记录页的状态。
  */
 typedef enum RecordPageCode{
-    RECORD_PAGE_EMPTY,  ///< 记录页为空
+    RECORD_PAGE_EMPTY, ///< 记录页为空
     RECORD_PAGE_USED    ///< 记录页已使用
 }RecordCode;
 
@@ -20,7 +20,7 @@ typedef enum RecordPageCode{
  */
 typedef struct RecordPage{
     Transaction *transaction;  ///< 事务指针
-    BlockID *blockId;         ///< 块ID
+    BlockID *blockId;         ///< 块 ID
     Layout *layout;           ///< 记录布局
 }RecordPage;
 

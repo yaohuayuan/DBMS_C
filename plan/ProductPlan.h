@@ -4,7 +4,10 @@
 
 #ifndef DBMS_C_PRODUCTPLAN_H
 #define DBMS_C_PRODUCTPLAN_H
-#include "Plan.h"
+typedef struct Plan Plan;
+typedef struct Schema Schema;
+typedef struct Scan Scan;
+typedef struct CString CString;
 /**
  * @brief ProductPlan 结构体定义，用于表示两个查询计划的乘积操作。
  */

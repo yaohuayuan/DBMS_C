@@ -1,9 +1,8 @@
 //
 // Created by yaohuayuan on 2024/12/5.
 //
-#define MIN(A, B) ((A) < (B) ? (A) : (B))
-
 #include "SelectPlan.h"
+#include "SelectScan.h"
 SelectPlan *SelectPlanInit(Plan*plan,Predicate*predicate){
     SelectPlan *selectPlan = malloc(sizeof(SelectPlan));
     selectPlan->predicate = predicate;

@@ -21,6 +21,8 @@ typedef struct {
     CString     *fileName;
 } TestCtx;
 
+static int g_log_test_counter = 0;
+
 /* 在每个用例前创建独立的日志文件与目录 */
 static int set_up(void **state) {
     TestCtx *ctx = malloc(sizeof(TestCtx));
@@ -56,9 +58,10 @@ static int set_up(void **state) {
     struct tm tm_now;
     gmtime_s(&tm_now, &t);
     snprintf(fileNameBuf, sizeof(fileNameBuf),
-             "log_%04d%02d%02d_%02d%02d%02d",
+             "log_%04d%02d%02d_%02d%02d%02d_%d",
              tm_now.tm_year+1900, tm_now.tm_mon+1, tm_now.tm_mday,
-             tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+             tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec,
+             g_log_test_counter++);
     ctx->fileName = CStringCreateFromCStr(fileNameBuf);
     ctx->lm = LogManagerInit(ctx->fm, ctx->fileName);
     *state = ctx;
@@ -70,19 +73,19 @@ static int tear_down(void **state) {
     TestCtx *ctx = *state;
     /* 按需增加文件删除逻辑 */
     // 删除日志文件
-    char *fileName = CStringGetPtr(ctx->fileName);
-    // 尝试删除可能的路径
+    const char *fileName = CStringGetPtr(ctx->fileName);
+ // 尝试删除可能的路径
     char path1[256];
     char path2[256];
     snprintf(path1, sizeof(path1), "Logtest\\%s", fileName);
     snprintf(path2, sizeof(path2), "%s", fileName);
+    FileManagerDestroy(ctx->fm);      /* 如有此接*/
     DeleteFileA(path1);
     DeleteFileA(path2);
     // 清理目录
     char dirPath[256];
     snprintf(dirPath, sizeof(dirPath), "Logtest");
     RemoveDirectoryA(dirPath);
-    FileManagerDestroy(ctx->fm);      /* 如有此接口 */
     free(ctx);
     return 0;
 }

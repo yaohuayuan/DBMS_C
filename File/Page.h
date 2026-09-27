@@ -1,14 +1,13 @@
-//
-// Created by yaohuayuan on 2025/5/31.
-//
-
 #ifndef NEWDBMS_PAGE_H
 #define NEWDBMS_PAGE_H
+
+#include <stdint.h>
 #include "ByteBuffer.h"
 #include "CString.h"
-typedef struct Page{
+
+typedef struct Page {
     ByteBuffer *buffer;
-}Page;
+} Page;
 
 /**
  * 初始化一个新的 Page 实例，并分配指定大小的缓冲区。
@@ -81,16 +80,15 @@ CString *PageGetString(Page *p, int position);
  */
 void PageSetString(Page *p, int position, const CString *str);
 
-
 /**
- * 在页面中设置一段原始字节数组。
+ * 向页面指定偏移处写入带长度前缀的字节数组。
  *
  * @param p 指向 Page 的指针。
- * @param position 数据在页面中的偏移量。
- * @param data 要写入的原始字节数组。
- * @param size 数据长度（以字节为单位）。
+ * @param position 页面内偏移量。
+ * @param data 要写入的字节数组。
+ * @param size 字节数组长度。
  */
-void PageSetBytes(Page *p, int position, const uint8_t *data,  uint64_t size);
+void PageSetBytes(Page *p, int position, const uint8_t *data, uint64_t size);
 
 /**
  * 从页面中读取一段原始字节数组。
@@ -102,12 +100,12 @@ void PageSetBytes(Page *p, int position, const uint8_t *data,  uint64_t size);
 uint8_t *PageGetBytes(Page *p, int position);
 
 /**
- * 计算给定字符串所需的最大存储空间。
+ * 计算字符串写入页面时需要的最大空间。
  *
  * @param cString 要计算的字符串。
  * @return 返回所需的存储空间大小（以字节为单位）。
  */
-int PageMaxLength(CString*cString);
+int PageMaxLength(CString *cString);
 
 /**
  * 销毁 Page 实例并释放其资源。
@@ -136,4 +134,4 @@ void PageSetBytesRaw(Page* p, int pos, const uint8_t* data, uint32_t size);
  */
 void PageGetBytesRaw(Page* p, int pos, uint8_t* out, uint32_t size);
 
-#endif //NEWDBMS_PAGE_H
+#endif // NEWDBMS_PAGE_H

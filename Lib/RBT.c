@@ -3,7 +3,7 @@
 //
 
 #include "RBT.h"
-#include "malloc.h"
+#include <stdlib.h>
 
 static RBNode* CreateNilNode(){
     RBNode *node = (RBNode*)malloc(sizeof(RBNode));

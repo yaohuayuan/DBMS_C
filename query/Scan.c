@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "ProductScan.h"
+#include "ProjectScan.h"
+#include "SelectScan.h"
+#include "TableScan.h"
 
 
 Scan *ScanInit(void *data,ScanCode code){

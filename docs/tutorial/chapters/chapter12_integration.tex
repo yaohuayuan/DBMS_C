@@ -1,67 +1,61 @@
-\chapter{综合实验与总结}
+﻿\chapter{综合实验与总结}
 \label{chap:integration}
 
 \section{实验目的}
 
-本章是整本实验指导书的收束章节。前面的章节分别从基础组件、文件页式存储、日志、缓冲区、事务、记录、元数据、解析、查询计划、更新执行和 Trace 观察等角度展开，本章将这些模块重新串成一条完整的 DBMS 执行链路。
+本章是整本实验指导书的收束章节，目标是帮助读者把前面各章拆开的模块重新串成一条完整的 DBMS 执行链路。完成本章后，读者应能够从一组 SQL 出发，说明 DBMS\_C 如何完成建表、插入、查询、修改、删除、提交和空结果查询，并能把这些操作对应到解析、计划、记录、事务、缓冲区、日志和文件页式存储等模块。
 
-通过本章，读者应能够从一组完整 SQL 出发，观察 DBMS\_C 如何完成建表、插入、查询、修改、删除、提交以及空结果查询，并能把这些操作对应回前面各章介绍过的源码模块和测试用例。本章不新增自动测试，也不要求扩展系统功能，而是帮助读者形成整体视角。
+本章不新增自动测试，也不扩展系统功能，而是用综合实验、图表和模块边界总结，把前面已经验证过的 CTest 与人工 Trace 观察组织成最终复盘材料。
 
 \section{综合实验主线}
 
-综合实验建议使用一组短小但覆盖面较完整的 SQL。它既包含更新类命令，也包含 SELECT 查询和最终提交，可以作为人工运行、Trace 观察和复盘源码调用链的统一样例。
-
-\begin{dbcode}[listing options={language=SQL}]{综合实验 SQL}
-CREATE TABLE final_student(id INT, name VARCHAR(20));
-INSERT INTO final_student(id, name) VALUES(1, 'wang');
-INSERT INTO final_student(id, name) VALUES(2, 'li');
-SELECT id, name FROM final_student WHERE id = 1;
-UPDATE final_student SET name = 'newwang' WHERE id = 1;
-SELECT id, name FROM final_student WHERE id = 1;
-DELETE FROM final_student WHERE id = 2;
-SELECT id, name FROM final_student WHERE id = 2;
-commit;
-\end{dbcode}
-
-这组 SQL 覆盖了建表、插入、查询、修改、删除、提交和空结果查询。建议实际演示时使用新的表名，例如 \codepath{final_student_001}、\codepath{final_student_002}，避免与已经存在的数据库目录或旧表名发生混淆。
-
-\section{完整执行链路说明}
-
-图 \ref{fig:integration-chain} 用一个压缩视角展示了 DBMS\_C 的综合执行链路。图中上半部分是 SQL 进入系统后的解析、计划和命令分发，下半部分是记录、事务、缓冲区和文件页式存储等支撑层。Trace 不参与数据修改，而是在旁路观察这些阶段。
+综合实验建议使用一组短小但覆盖面较完整的 SQL。它既包含更新类命令，也包含 SELECT 查询和最终提交，适合作为人工运行、Trace 观察和源码调用链复盘的统一样例。
 
 \begin{figure}[htbp]
   \centering
-  \begin{tikzpicture}[node distance=8mm and 9mm]
-    \node[dblevel] (sql) {SQL 输入};
-    \node[dbnode, below=of sql] (parse) {第8章 Parse\\QueryData / CommandData};
-    \node[dbnode, below left=of parse, xshift=-8mm] (query) {第9章 Plan / Scan\\SELECT 查询};
-    \node[dbnode, below right=of parse, xshift=8mm] (update) {第10章 Update\\更新命令分发};
-    \node[dbnode, below=18mm of parse] (metadata) {第7章 Metadata\\系统目录};
-    \node[dbnode, below=of metadata] (record) {第6章 Record\\记录布局与扫描};
-    \node[dbnode, below left=of record, xshift=-8mm] (tx) {第5章 Transaction\\提交、回滚、并发基础};
-    \node[dbnode, below right=of record, xshift=8mm] (buffer) {第4章 Buffer\\pin / dirty / flush};
-    \node[dbnode, below=18mm of record] (file) {第2章 File / Page\\文件块与页};
-    \node[dbnode, left=of file, xshift=-8mm] (log) {第3章 Log\\日志追加与刷盘};
-    \node[dbnode, right=of file, xshift=8mm] (lib) {第1章 Lib\\基础工具};
-    \node[dbnode, right=of update, xshift=10mm] (trace) {第11章 Trace\\CLI 过程观察};
+  \resizebox{0.80\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=8mm and 12mm,
+    every node/.style={align=center},
+    core/.style={dblevel, text width=32mm, minimum height=9mm},
+    mod/.style={dbnode, text width=34mm, minimum height=10mm},
+    side/.style={dbsubnode, text width=30mm, minimum height=10mm}
+  ]
+    \node[core] (sql) {SQL 输入};
+    \node[mod, below=of sql] (parse) {第8章 Parse\\QueryData / CommandData};
+
+    \node[mod, below left=10mm and 16mm of parse] (query) {第9章 Plan / Scan\\SELECT 查询};
+    \node[mod, below right=10mm and 16mm of parse] (update) {第10章 Update\\更新命令分发};
+    \node[side, right=16mm of update] (trace) {第11章 Trace\\CLI 过程观察};
+
+    \node[mod, below=20mm of parse] (meta) {第7章 Metadata\\系统目录};
+    \node[mod, below=of meta] (record) {第6章 Record\\记录布局与表扫描};
+
+    \node[mod, below left=10mm and 10mm of record] (tx) {第5章 Transaction\\提交、回滚、锁};
+    \node[mod, below right=10mm and 10mm of record] (buffer) {第4章 Buffer\\pin / dirty / flush};
+
+    \node[mod, below=19mm of record] (file) {第2章 File / Page\\文件块与页};
+    \node[side, below left=6mm and 8mm of tx] (log) {第3章 Log\\日志追加与刷盘};
+    \node[side, below right=6mm and 8mm of buffer] (lib) {第1章 Lib\\基础工具};
 
     \draw[dbarrow] (sql) -- (parse);
     \draw[dbarrow] (parse) -- (query);
     \draw[dbarrow] (parse) -- (update);
-    \draw[dbarrow] (query) -- (metadata);
-    \draw[dbarrow] (update) -- (metadata);
-    \draw[dbarrow] (metadata) -- (record);
+    \draw[dbarrow] (query) -- (meta);
+    \draw[dbarrow] (update) -- (meta);
+    \draw[dbarrow] (meta) -- (record);
     \draw[dbarrow] (record) -- (tx);
     \draw[dbarrow] (record) -- (buffer);
     \draw[dbarrow] (tx) -- (log);
     \draw[dbarrow] (tx) -- (buffer);
     \draw[dbarrow] (buffer) -- (file);
-    \draw[dbarrow] (lib) -- (file);
+    \draw[dbarrow] (lib) -- (buffer);
+
     \draw[dbdashline] (trace) -- (parse);
-    \draw[dbdashline] (trace) -- (query);
     \draw[dbdashline] (trace) -- (update);
     \draw[dbdashline] (trace) -- (tx);
-  \end{tikzpicture}
+
+  \end{tikzpicture}}
   \caption{DBMS\_C 综合执行链路图}
   \label{fig:integration-chain}
 \end{figure}
@@ -72,14 +66,16 @@ commit;
 
 \begin{table}[htbp]
   \centering
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
   \caption{SQL 命令与模块关系表}
   \label{tab:integration-command-module}
-  \begin{tabularx}{\textwidth}{p{30mm}Y Y}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{28mm}>{\raggedright\arraybackslash}p{50mm}Y}
     \toprule
     SQL 类型 & 主要经过模块 & 观察重点 \\
     \midrule
     CREATE TABLE & Parser、Update、Metadata、Record & 命令解析、表结构登记、系统目录写入 \\
-    INSERT & Parser、Update、Record、Transaction、Buffer & 记录插入、写入事务层、页框标脏 \\
+    INSERT & Parser、Update、Record、Transaction、Buffer & 记录插入、事务写入、页框标脏 \\
     SELECT & Parser、Plan、Scan、Record、Metadata & QueryData、计划树、扫描链和输出行数 \\
     UPDATE & Parser、Update、Scan、Record、Transaction & 定位匹配记录并修改字段值 \\
     DELETE & Parser、Update、Scan、Record、Transaction & 定位匹配记录并删除 slot \\
@@ -93,13 +89,13 @@ commit;
 综合实验可以按两种方式观察。第一种是普通模式，重点观察 SQL 的用户可见输出；第二种是 Trace 模式，重点观察 SQL 在内部模块之间的传递过程。
 
 \begin{dbcode}[listing options={language=sh}]{普通模式运行}
-bin\NewDBMS.exe
+./bin/NewDBMS.exe
 \end{dbcode}
 
 普通模式适合确认命令是否可以正常执行、查询结果是否符合预期。Trace 默认关闭，因此普通输出不会混入 Trace 标签。
 
 \begin{dbcode}[listing options={language=sh}]{Trace 模式运行}
-bin\NewDBMS.exe --trace
+./bin/NewDBMS.exe --trace
 \end{dbcode}
 
 也可以在交互式命令行中输入：
@@ -110,15 +106,15 @@ trace off;
 trace;
 \end{dbcode}
 
-Trace 是 CLI 文本过程可视化，不是图形界面。它适合把第8章到第10章的执行链路连接起来观察，但不改变 SQL 的执行结果。
-
-表 \ref{tab:integration-normal-trace} 对普通模式和 Trace 模式作一个综合对照。
+Trace 是 CLI 文本过程可视化，不是图形界面。它适合把第8章到第10章的执行链路连接起来观察，但不改变 SQL 的执行结果。表 \ref{tab:integration-normal-trace} 对普通模式和 Trace 模式作综合对照。
 
 \begin{table}[htbp]
   \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
   \caption{普通模式与 Trace 模式综合观察表}
   \label{tab:integration-normal-trace}
-  \begin{tabularx}{\textwidth}{p{28mm}Y Y}
+  \begin{tabularx}{\textwidth}{p{25mm}Y Y}
     \toprule
     运行方式 & 适合观察 & 注意事项 \\
     \midrule
@@ -131,35 +127,35 @@ Trace 是 CLI 文本过程可视化，不是图形界面。它适合把第8章�
 
 \section{测试体系总览}
 
-本指导书从第1章到第10章遵循“先补真实 CTest，再写章节”的方式组织。第11章 Trace 是人工验证型实验，因此不新增自动测试。表 \ref{tab:integration-ctest-matrix} 汇总了已经作为章节依据的测试。
+本指导书从第1章到第10章采用“先补真实 CTest，再写章节”的方式组织。第11章 Trace 是人工验证型实验，因此不新增自动测试。表 \ref{tab:integration-ctest-matrix} 汇总了已经作为章节依据的测试。
 
-\begin{longtable}{p{36mm}p{22mm}p{35mm}p{58mm}}
+\begin{table}[htbp]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2.5pt}
   \caption{新增 CTest 覆盖矩阵}
-  \label{tab:integration-ctest-matrix}\\
-  \toprule
-  测试名称 & 对应章节 & 覆盖模块 & 验证重点 \\
-  \midrule
-  \endfirsthead
-  \toprule
-  测试名称 & 对应章节 & 覆盖模块 & 验证重点 \\
-  \midrule
-  \endhead
-  LibBasicTest & 第1章 & Lib & 字符串、容器、字节缓冲和词法切分基础行为 \\
-  FileManagerBasicTest & 第2章 & File/Page & Page 读写、BlockID、FileManager 块级读写 \\
-  LogManagerBasicTest & 第3章 & Log & 日志追加、刷盘和基础读取能力 \\
-  BufferManagerBasicTest & 第4章 & buffer & pin/unpin、modified/dirty 和 flush 行为 \\
-  TransactionBasicTest & 第5章 & tx & Transaction 与 BufferList、BufferManager 的基础协作 \\
-  ConcurrencyBasicTest & 第5章 & tx/concurrency & S 锁、X 锁和释放锁的基础调用 \\
-  RecoveryBasicTest & 第5章 & tx/recovery & 修改旧值记录和 rollback 基础行为 \\
-  RecordBasicTest & 第6章 & record & Schema、Layout、RID、RecordPage、TableScan 基础行为 \\
-  MetadataBasicTest & 第7章 & metadata & 表、视图、索引元数据登记与读回 \\
-  ParseBasicTest & 第8章 & parse/query & SELECT、INSERT、UPDATE、DELETE、CREATE 的解析结果 \\
-  PlanScanBasicTest & 第9章 & plan/query/record & SELECT 计划生成、Scan 打开和结果读取 \\
-  UpdateBasicTest & 第10章 & plan/metadata/record & CREATE、INSERT、UPDATE、DELETE、VIEW、INDEX 更新路径 \\
-  \bottomrule
-\end{longtable}
+  \label{tab:integration-ctest-matrix}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{38mm}p{15mm}p{31mm}Y}
+    \toprule
+    测试名称 & 对应章节 & 覆盖模块 & 验证重点 \\
+    \midrule
+    LibBasicTest & 第1章 & Lib & 字符串、容器、字节缓冲和词法切分基础行为 \\
+    FileManagerBasicTest & 第2章 & File/Page & Page 读写、BlockID、FileManager 块级读写 \\
+    LogManagerBasicTest & 第3章 & Log & 日志追加、刷盘和基础读取能力 \\
+    BufferManagerBasicTest & 第4章 & buffer & pin/unpin、modified/dirty 和 flush 行为 \\
+    TransactionBasicTest & 第5章 & tx & Transaction 与 BufferList、BufferManager 的基础协作 \\
+    ConcurrencyBasicTest & 第5章 & tx/concurrency & S 锁、X 锁和释放锁的基础调用 \\
+    RecoveryBasicTest & 第5章 & tx/recovery & 修改旧值记录和 rollback 基础行为 \\
+    RecordBasicTest & 第6章 & record & Schema、Layout、RID、RecordPage、TableScan 基础行为 \\
+    MetadataBasicTest & 第7章 & metadata & 表、视图、索引元数据登记与读取 \\
+    ParseBasicTest & 第8章 & parse/query & SELECT、INSERT、UPDATE、DELETE、CREATE 的解析结果 \\
+    PlanScanBasicTest & 第9章 & plan/query/record & SELECT 计划生成、Scan 打开和结果读取 \\
+    UpdateBasicTest & 第10章 & plan/metadata/record & CREATE、INSERT、UPDATE、DELETE、VIEW、INDEX 更新路径 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-这些测试不是为了覆盖所有边界条件，而是为实验指导书建立可运行的最小证据链。读者在扩展实验时，应继续沿用同一原则：先确认真实 API 和可运行测试，再把测试路径、观察点和源码位置写入文档。
+这些测试不是为了覆盖所有边界条件，而是为实验指导书建立可运行的最小证据链。读者在扩展实验时，可以继续沿用同一原则：先确认真实 API 和可运行测试，再把测试路径、观察点和源码位置写入文档。
 
 \section{模块边界总结}
 
@@ -167,9 +163,11 @@ Trace 是 CLI 文本过程可视化，不是图形界面。它适合把第8章�
 
 \begin{table}[htbp]
   \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
   \caption{各章节对应模块总览表}
   \label{tab:integration-chapter-module}
-  \begin{tabularx}{\textwidth}{p{18mm}p{34mm}Y}
+  \begin{tabularx}{\textwidth}{p{18mm}p{33mm}Y}
     \toprule
     章节 & 模块 & 职责边界 \\
     \midrule

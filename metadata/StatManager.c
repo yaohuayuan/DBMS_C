@@ -8,33 +8,33 @@
 
 
 // 初始化StartManager
-StatManager* StartManagerInit(TableManager *tblMgr, Transaction *tx) {
+StatManager* StatManagerInit(TableManager *tblMgr, Transaction *tx) {
     StatManager *sm = (StatManager*)malloc(sizeof(StatManager));
     sm->tblMgr = tblMgr;
     sm->tablestats = malloc(sizeof(map_StartInfo_t));
     map_init(sm->tablestats);
     sm->numcalls = 0;
-    StartManagerRefreshStatistics(sm, tx);
+    StatManagerRefreshStatistics(sm, tx);
     return sm;
 }
 
 // 获取表的统计信息
-StatInfo* StartManagerGetStatInfo(StatManager *sm, char *tblname, Layout *layout, Transaction *tx) {
+StatInfo* StatManagerGetStatInfo(StatManager *sm, const char *tblname, Layout *layout, Transaction *tx) {
     sm->numcalls++;
     if (sm->numcalls > 100) {
-        StartManagerRefreshStatistics(sm, tx);
+        StatManagerRefreshStatistics(sm, tx);
     }
     StatInfo *si = NULL;
     si=map_get(sm->tablestats, tblname);
     if (si== NULL) {
-        si = StartManagerCalcTableStats(sm, tblname, layout, tx);
+        si = StatManagerCalcTableStats(sm, tblname, layout, tx);
         map_set(sm->tablestats, tblname, *si);
     }
     return si;
 }
 
-// 刷新所有表的统计信息
-void StartManagerRefreshStatistics(StatManager *sm, Transaction *tx) {
+ // 刷新所有表的统计信息
+void StatManagerRefreshStatistics(StatManager *sm, Transaction *tx) {
     map_deinit(sm->tablestats);
     sm->tablestats = malloc(sizeof(map_StartInfo_t));
     map_init(sm->tablestats);
@@ -46,11 +46,11 @@ void StartManagerRefreshStatistics(StatManager *sm, Transaction *tx) {
     TableScan *t = TableScanInit(tx, tblcatParam, tcatlayout);
     Scan*tcat = ScanInit(t,SCAN_TABLE_CODE);
     while (TableScanNext(tcat)) {
-        char *tblnameStr = TableScanGetString(tcat, tblnameParam);
+        const char *tblnameStr = TableScanGetString(tcat, tblnameParam);
 //        printf("%s\n",tblnameStr);
         CString *tblname = CStringCreateFromCStr(tblnameStr);
         Layout *layout = TableManagerGetLayout(sm->tblMgr, tblname, tx);
-        StatInfo *si = StartManagerCalcTableStats(sm, tblnameStr, layout, tx);
+        StatInfo *si = StatManagerCalcTableStats(sm, tblnameStr, layout, tx);
         map_set(sm->tablestats, tblnameStr, *si);
         CStringDestroy(tblname);
     }
@@ -60,7 +60,7 @@ void StartManagerRefreshStatistics(StatManager *sm, Transaction *tx) {
 }
 
 // 计算单个表的统计信息
-StatInfo* StartManagerCalcTableStats(StatManager *sm, char *tblname, Layout *layout, Transaction *tx) {
+StatInfo* StatManagerCalcTableStats(StatManager *sm, const char *tblname, Layout *layout, Transaction *tx) {
     int numRecs = 0;
     int numblocks = 0;
     CString *tblnameParam = CStringCreateFromCStr(tblname);
@@ -75,8 +75,8 @@ StatInfo* StartManagerCalcTableStats(StatManager *sm, char *tblname, Layout *lay
     return StatInfoInit(numblocks, numRecs);
 }
 
-// 释放StartManager资源
-void StartManagerFree(StatManager *sm) {
+ // 释放StartManager资源
+void StatManagerFree(StatManager *sm) {
     map_deinit(sm->tablestats);
     free(sm);
 }

@@ -15,7 +15,7 @@ SelectScan *SelectScanInit(Scan*s,Predicate*predicate);
 void SelectScanBeforeFirst(void*data);
 bool SelectScanNext(void *data);
 int SelectScanGetInt(void *data,CString *fldname);
-char * SelectScanGetString(void *data,CString *fldname);
+const char * SelectScanGetString(void *data,CString *fldname);
 Constant *SelectScanGetVal(void *data,CString *fldname);
 bool SelectScanHasField(void *data,CString *fldname);
 void SelectScanClose(void *data);

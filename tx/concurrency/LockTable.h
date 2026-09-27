@@ -13,7 +13,7 @@
  * @brief LockTable 结构体，用于管理锁表，存储块的锁状态。
  */
 typedef struct LockTable{
-    map_int_t *Locks;  ///< 用于存储块锁信息的映射
+    map_int_t *Locks; ///< 用于存储块锁信息的映射
 }LockTable;
 
 /**

@@ -17,7 +17,7 @@ typedef struct TablePlan{
     CString *tblname;    ///< 表名
     Transaction *tx;  ///< 事务指针
     Layout *layout;   ///< 表布局
-    StatInfo *si;     ///< 表统计信息
+    StatInfo *si; ///< 表统计信息
 }TablePlan;
 
 /**

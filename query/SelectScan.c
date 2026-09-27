@@ -29,7 +29,7 @@ int SelectScanGetInt(void *data,CString *fldname){
     SelectScan *selectScan = scan->scanUnion.selectScan;
     return selectScan->s->getInt(selectScan->s,fldname);
 }
-char * SelectScanGetString(void *data,CString *fldname){
+const char * SelectScanGetString(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     SelectScan *selectScan = scan->scanUnion.selectScan;
     return selectScan->s->getString(selectScan->s,fldname);

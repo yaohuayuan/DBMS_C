@@ -4,16 +4,16 @@
 
 #ifndef NEWDBMS_CSTRING_H
 #define NEWDBMS_CSTRING_H
-#include "string.h"
-#include "malloc.h"
+#include <string.h>
+#include <stdlib.h>
 #include "CCMath.h"
 #include <stdlib.h>
 #include <stdbool.h>
 
 // CString 结构体（不透明类型）
 typedef struct CString {
-    char* data;     // 字符串数据指针
-    size_t length;  // 当前字符串长度（不含空终止符）
+    char* data;      // 字符串数据指针
+    size_t length;   // 当前字符串长度（不含空终止符）
     size_t capacity; // 分配的内存容量
 }CString;
 /**

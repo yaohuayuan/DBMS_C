@@ -4,16 +4,16 @@
 \section{实验目的}
 \label{sec:parse-purpose}
 
-本章用于理解 DBMS\_C 如何把一条 SQL 字符串转换为后续模块可以使用的结构化对象。对于数据库系统来说，SQL 输入只是普通文本；在进入查询计划、扫描执行或更新执行之前，系统必须先完成词法切分、语法识别和 Data 对象构造。本章只讨论解析阶段，不执行 SQL，不生成 Plan，也不访问表数据。
+本章用于理解 DBMS\_C 如何把一条 SQL 字符串转换为其他模块可以使用的结构化对象。对于数据库系统来说，SQL 输入只是普通文本；在进入查询计划、扫描执行或更新执行之前，系统必须先完成词法切分、语法识别和 Data 对象构造。本章只讨论解析阶段，不执行 SQL，不生成 Plan，也不访问表数据。
 
-本章继续采用“先补真实 CTest，再写章节”的实验组织方式。本轮新增并验证通过的测试是 \codepath{test/parse/ParseBasicTest.c}，覆盖 SELECT、INSERT、UPDATE、DELETE、CREATE TABLE、CREATE VIEW 和 CREATE INDEX 的基础解析行为。测试只断言 Parser 产出的 Data 对象是否符合输入 SQL，不进入第9章的 Plan/Scan，也不进入第10章的更新执行。
+本章继续采用“先补真实 CTest，再写章节”的实验组织方式。配套测试 \codepath{test/parse/ParseBasicTest.c} 覆盖 SELECT、INSERT、UPDATE、DELETE、CREATE TABLE、CREATE VIEW 和 CREATE INDEX 的基础解析行为。测试只断言 Parser 产出的 Data 对象是否符合输入 SQL，不进入第9章的 Plan/Scan，也不进入第10章的更新执行。
 
 \section{SQL 解析在 DBMS\_C 中的位置}
 \label{sec:parse-position}
 
 SQL 解析位于命令行输入和执行模块之间。用户在 CLI 中输入 SQL 后，系统先通过 Lexer 将字符流切分为关键字、标识符、常量和分隔符，再由 Parser 按 SQL 类型构造对应的数据对象。例如 SELECT 会生成 \codepath{QueryData}，INSERT 会生成 \codepath{InsertData}，CREATE TABLE 会生成 \codepath{CreateTableData}。这些 Data 对象本身不负责执行，只负责保存“解析结果”。
 
-图 \ref{fig:parse-sql-to-data} 展示了从 SQL 字符串到 Data 对象的转换关系。图中右侧的 Plan、UpdatePlanner 和 Transaction 只是后续消费者，本章不会展开它们的执行逻辑。
+图 \ref{fig:parse-sql-to-data} 展示了从 SQL 字符串到 Data 对象的转换关系。图中右侧的 Plan、UpdatePlanner 和 Transaction 是解析结果的下游消费者，本章不会展开它们的执行逻辑。
 
 \begin{figure}[htbp]
   \centering
@@ -196,7 +196,7 @@ CommandData *ParserUpdateCmd(Parser*parser){
 }
 \end{dbcode}
 
-第三段代码来自 \codepath{parse/Parser.c} 的 \apiname{ParserTerm} 和 \apiname{ParserPredicate}。当前实现把一个比较表达式封装为 Term；如果遇到 \codepath{and}，再把后续 Predicate 合并进来。
+第三段代码来自 \codepath{parse/Parser.c} 的 \apiname{ParserTerm} 和 \apiname{ParserPredicate}。当前实现把一个比较表达式封装为 Term；如果遇到 \codepath{and}，再把后面的 Predicate 合并进来。
 
 \begin{dbcode}{ParserTerm 与 ParserPredicate 构造 WHERE 条件}
 Term *ParserTerm(Parser*parser){
@@ -247,7 +247,7 @@ CommandData* ParserCreateTable(Parser*parser){
   \item CREATE TABLE 是否生成真实 \codepath{Schema}，并能读出字段类型和长度。
 \end{enumerate}
 
-图 \ref{fig:parse-command-flow} 用 INSERT 和 CREATE TABLE 为例说明解析阶段的调用链。它只展示 Data 对象生成，不展示后续执行。
+图 \ref{fig:parse-command-flow} 用 INSERT 和 CREATE TABLE 为例说明解析阶段的调用链。它只展示 Data 对象生成，不展示执行阶段。
 
 \begin{figure}[htbp]
   \centering

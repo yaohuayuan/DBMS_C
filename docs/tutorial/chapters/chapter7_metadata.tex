@@ -6,12 +6,12 @@
 
 本章用于理解 DBMS\_C 如何保存和读取“关于表的数据”。记录管理层已经能把字段和记录放进表文件，但数据库系统还需要知道有哪些表、每个表有哪些字段、视图定义放在哪里、索引登记在哪张目录表中。元数据管理层的任务就是维护这些系统目录，使上层模块可以通过表名、字段名、视图名和索引名重新找到结构信息。
 
-本章仍然遵循“先补真实 CTest，再写章节”的方式。本轮新增的 \codepath{MetadataBasicTest} 只验证元数据登记和读回能力：创建表后读回 Layout，创建视图后读回 view definition，创建索引后从 idxcat 读回 IndexInfo。不测试 SQL Parser，不测试查询计划选择索引，也不测试优化器代价模型。
+本章仍然遵循“先补真实 CTest，再写章节”的方式。\codepath{MetadataBasicTest} 验证元数据登记和读回能力：创建表后读回 Layout，创建视图后读回 view definition，创建索引后从 idxcat 读回 IndexInfo。本章不测试 SQL Parser，不测试查询计划选择索引，也不测试优化器代价模型。
 
 \section{模块作用}
 \label{sec:metadata-role}
 
-\codepath{metadata/} 位于记录管理和 SQL 执行层之间。它并不直接执行查询，而是提供系统目录访问能力。上层在执行 \codepath{CREATE TABLE}、\codepath{CREATE VIEW}、\codepath{CREATE INDEX} 时，需要把定义写入 catalog；后续查询、更新和计划生成阶段，再通过 MetadataManager 查回表布局、视图定义、索引信息和统计信息。
+\codepath{metadata/} 位于记录管理和 SQL 执行层之间。它并不直接执行查询，而是提供系统目录访问能力。上层在执行 \codepath{CREATE TABLE}、\codepath{CREATE VIEW}、\codepath{CREATE INDEX} 时，需要把定义写入 catalog；查询、更新和计划生成阶段，再通过 MetadataManager 查回表布局、视图定义、索引信息和统计信息。
 
 当前实现中，\codepath{MetadataMgr} 是一个外观对象，内部持有 \codepath{TableManager}、\codepath{ViewManager}、\codepath{StatManager} 和 \codepath{IndexManager}。调用者通常不需要分别创建这些子管理器，而是通过 MetadataManager 的接口完成元数据创建与查询。
 
@@ -243,7 +243,7 @@ TableScanClose(scan);
 \section{运行与观察}
 \label{sec:metadata-run}
 
-在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建并运行测试：
+进入项目根目录后，使用固定命令构建并运行测试：
 
 \begin{dbcode}[listing options={language=bash}]{构建并运行 Metadata 测试}
 cmake -S . -B build
@@ -268,5 +268,5 @@ ctest --test-dir build --output-on-failure -R Metadata
   \item 为什么数据库需要系统目录表，而不是只把 Schema 保存在内存结构中？
   \item \codepath{tblcat} 和 \codepath{fldcat} 为什么要拆成两张目录表？
   \item 当前 \codepath{viewcat} 只保存视图定义字符串，这种设计的优点和局限是什么？
-  \item \codepath{idxcat} 登记索引后，为什么还需要后续 Plan 章节来说明索引如何被使用？
+  \item \codepath{idxcat} 登记索引后，为什么还需要 Plan 章节来说明索引如何被使用？
 \end{enumerate}

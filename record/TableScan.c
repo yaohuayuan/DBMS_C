@@ -107,7 +107,7 @@ int TableScanGetInt(void *data,CString *fileName){
     TableScan *tableScan = scan->scanUnion.tableScan;
     return RecordPageGetInt(tableScan->recordPage,tableScan->currentSlot,fileName);
 }
-char* TableScanGetString(void *data,CString *fileName){
+const char* TableScanGetString(void *data,CString *fileName){
     Scan*scan    = (Scan*)data;
     TableScan *tableScan = scan->scanUnion.tableScan;
     return RecordPageGetString(tableScan->recordPage,tableScan->currentSlot,fileName);

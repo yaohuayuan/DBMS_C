@@ -16,7 +16,7 @@ bool ProjectScanNext(void *data){
 bool ProjectScanHasField(void*data,CString *fldname){
     Scan*scan = (Scan*)data;
     ProjectScan *projectScan = scan->scanUnion.projectScan;
-    return ListContains(projectScan->fieldList,fldname);
+    return CListContains(projectScan->fieldList,fldname);
 }
 int ProjectScanGetInt(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
@@ -26,7 +26,7 @@ int ProjectScanGetInt(void *data,CString *fldname){
     }
     return 0;
 }
-char * ProjectScanGetString(void *data,CString *fldname){
+const char * ProjectScanGetString(void *data,CString *fldname){
     Scan*scan = (Scan*)data;
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     if(ProjectScanHasField(data,fldname)){
@@ -48,7 +48,7 @@ void ProjectClose(void *data){
     ProjectScan *projectScan = scan->scanUnion.projectScan;
     projectScan->s->close(projectScan->s);
 }
-ProjectScan* ProjectScanInit(Scan *s,List*fieldList){
+ProjectScan* ProjectScanInit(Scan *s,CList*fieldList){
     ProjectScan *projectScan = malloc(sizeof (ProjectScan));
     projectScan->fieldList = fieldList;
     projectScan->s = s;

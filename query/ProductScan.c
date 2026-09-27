@@ -32,7 +32,7 @@ int ProductScanGetInt(void *data,CString *fldname){
         return productScan->s2->getInt(productScan->s2,fldname);
     }
 }
-char * ProductScanGetString(void *data,CString *fldname){
+const char * ProductScanGetString(void *data,CString *fldname){
     Scan *scan = (Scan*)data;
     ProductScan *productScan = scan->scanUnion.productScan;
     if(productScan->s1->hasField(productScan->s1,fldname)){

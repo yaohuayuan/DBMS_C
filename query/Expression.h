@@ -15,8 +15,9 @@ typedef struct Scan  Scan;
 typedef struct Expression {
     Constant *val;       ///< 常量值，当表达式是常量时有效
     CString *fldname;    ///< 字段名，当表达式是字段引用时有效
+    CString *tableName;
 } Expression;
-
+Expression* ExpressionInitFieldRef(const char *tableName,const char *fldname) ;
 /**
  * @brief 创建一个新的常量表达式。
  *

@@ -20,7 +20,7 @@ typedef struct ProjectPlan{
  * @param fieldlist 投影的字段列表。
  * @return 返回初始化后的 ProjectPlan 指针。
  */
-ProjectPlan *ProjectPlanInit(Plan*plan,List*fieldlist);
+ProjectPlan *ProjectPlanInit(Plan*plan,CList*fieldlist);
 
 /**
  * @brief 打开投影计划的扫描器。

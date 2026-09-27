@@ -1,8 +1,22 @@
-﻿build/
+# ---- Build output ----
+build/
 build-*/
+cmake-build-*/
+bin/
+release/
+*.exe
+*.obj
+*.dll
+*.zip
+
+# ---- Runtime test databases ----
 Logtest/
 Show1/
+Show2/
 *_test_db*/
+demo_db*/
+
+# ---- LaTeX / docs build output ----
 *.aux
 *.log
 *.toc
@@ -11,3 +25,8 @@ Show1/
 *.synctex.gz
 *.fls
 *.fdb_latexmk
+/main.pdf
+
+# ---- IDE ----
+.idea/
+.vscode/

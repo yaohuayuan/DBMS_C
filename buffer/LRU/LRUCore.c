@@ -3,8 +3,8 @@
 //
 
 #include "LRUCore.h"
-#include"CVector.h"
-#include"Buffer.h"
+#include "CVector.h"
+#include "Buffer.h"
 #define HASH_TABLE_SIZE 257
 
 LRUNode* LRUNodeInit(int key,int data){

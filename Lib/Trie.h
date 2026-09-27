@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TRIE_CHARSET_SIZE 128  // 支持完整 ASCII 字符集
+#define TRIE_CHARSET_SIZE 128 // 支持完整 ASCII 字符集
 
 typedef struct Trie {
     bool isEnd;

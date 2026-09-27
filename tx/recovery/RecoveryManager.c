@@ -42,7 +42,7 @@ int RecoverySetInt(RecoveryManager*recoveryManager,Buffer*buffer,int offset,int 
     BlockID *blockId = buffer->blockId;
     return SetIntRecordWriteToLog(recoveryManager->logManager,recoveryManager->txNum,blockId,offset,oldVal);
 }
-int RecoverySetString(RecoveryManager*recoveryManager,Buffer*buffer,int offset,char* newVal){
+int RecoverySetString(RecoveryManager*recoveryManager,Buffer*buffer,int offset,const char* newVal){
     CString* oldVal = PageGetString(buffer->page,offset);
     BlockID *blockId = buffer->blockId;
     return SetStringRecordWriteToLog(recoveryManager->logManager,recoveryManager->txNum,blockId,offset,oldVal);

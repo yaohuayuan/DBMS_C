@@ -40,12 +40,12 @@ static bool dfsColor(int tx,
     if (color[tx] == 1) return true;   // 发现回边
     if (color[tx] == 2) return false;
 
-    color[tx] = 1;                     // 标记为“访问中”
+    color[tx] = 1; // 标记为“访问中”
     for (WaitForEdge *e = d->waitForList; e; e = e->next) {
         if (e->fromTx == tx && dfsColor(e->toTx, color, d))
             return true;
     }
-    color[tx] = 2;                     // 标记为“已结束”
+    color[tx] = 2; // 标记为“已结束”
     return false;
 }
 

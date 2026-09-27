@@ -7,18 +7,18 @@
 
 
 #include "Scan.h"
-#include "List.h"
+#include "CList.h"
 typedef struct ProjectScan{
     Scan *s;
-    List *fieldList;
+    CList *fieldList;
 }ProjectScan;
 
-ProjectScan* ProjectScanInit(Scan *s,List*fieldList);
+ProjectScan* ProjectScanInit(Scan *s,CList*fieldList);
 void ProjectScanBeforeFirst(void *data);
 bool ProjectScanNext(void *data);
 bool ProjectScanHasField(void*data,CString *fldname);
 int ProjectScanGetInt(void *data,CString *fldname);
-char * ProjectScanGetString(void *data,CString *fldname);
+const char * ProjectScanGetString(void *data,CString *fldname);
 Constant * ProjectScanGetVal(void *data,CString *fldname);
 void ProjectClose(void *data);
 

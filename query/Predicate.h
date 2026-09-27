@@ -4,7 +4,7 @@
 
 #ifndef DBMS_C_PREDICATE_H
 #define DBMS_C_PREDICATE_H
-#include "List.h"
+#include "CList.h"
 #include "Term.h"
 typedef struct Term Term;
 typedef struct Plan Plan;
@@ -12,7 +12,7 @@ typedef struct Plan Plan;
  * @brief Predicate 结构体，用于表示查询条件，包含多个 Term 对象。
  */
 typedef struct Predicate{
-    List *terms; ///< Term 对象的列表
+    CList *terms; ///< Term 对象的列
 }Predicate;
 
 /**

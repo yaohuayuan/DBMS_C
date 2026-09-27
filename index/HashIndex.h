@@ -22,7 +22,7 @@ typedef struct HashIndex {
     Transaction *transaction; ///< 指向当前事务的指针
     char *idxname;            ///< 索引名称
     Layout *layout;           ///< 表布局信息
-    Constant *constant;       ///< 当前处理的常量值
+    Constant *constant; ///< 当前处理的常量值
     Scan *scan;               ///< 扫描器，用于遍历表数据
 } HashIndex;
 

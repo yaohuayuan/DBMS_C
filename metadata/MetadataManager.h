@@ -18,7 +18,7 @@
  * @brief MetadataMgr 结构体定义，用于管理数据库元数据。
  */
 typedef struct MetadataMgr {
-    TableManager *tblMgr;     ///< 指向表管理器的指针
+    TableManager *tblMgr; ///< 指向表管理器的指针
     ViewManager *viewMgr;     ///< 指向视图管理器的指针
     StatManager *statMgr;    ///< 指向统计管理器的指针
     IndexManager *idxMgr;     ///< 指向索引管理器的指针

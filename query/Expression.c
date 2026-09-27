@@ -5,7 +5,7 @@
 #include "Expression.h"
 #include "CString.h"
 #include <stdlib.h>
-#include <stdio.h>  // 包含标准输入输出函数
+#include <stdio.h> // 包含标准输入输出函数
 #include <string.h> // 包含字符串处理函数
 
 // 创建新的常量表达式
@@ -29,14 +29,29 @@ Expression* ExpressionInitFieldName(const char *fldname) {
     }
     expr->val = NULL;
     expr->fldname = CStringCreateFromCStr(fldname); // 使用CStringCreateFromCStr创建CString
+    expr->tableName = NULL;
     if (expr->fldname == NULL) {
         fprintf(stderr, "Memory allocation failed.\n");
         exit(EXIT_FAILURE);
     }
     return expr;
 }
-
-// 创建新的字段名表达式（从CString*）
+Expression* ExpressionInitFieldRef(const char *tableName,const char *fldname) {
+    Expression *expr = (Expression*)malloc(sizeof(Expression));
+    if (expr == NULL) {
+        fprintf(stderr, "Memory allocation failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    expr->val = NULL;
+    expr->tableName = CStringCreateFromCStr(tableName);
+    expr->fldname = CStringCreateFromCStr(fldname); // 使用CStringCreateFromCStr创建CString
+    if (expr->fldname == NULL) {
+        fprintf(stderr, "Memory allocation failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    return expr;
+}
+// 创建新的字段名表达式（从 CString*）
 Expression* ExpressionInitCStringFieldName(CString *fldname) {
     Expression *expr = (Expression*)malloc(sizeof(Expression));
     if (expr == NULL) {

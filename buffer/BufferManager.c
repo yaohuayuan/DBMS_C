@@ -1,24 +1,21 @@
-//
-// Created by Lenovo on 2025/7/16.
-//
 #include "BufferManager.h"
+
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-
 #include "LRU/LRUPolicy.h"
 
-Buffer *BufferManagerFindExistingBuffer(BufferManager *bm, BlockID *blockId){
-    for(int i = 0; i < bm->bufferSize; i++){
+Buffer *BufferManagerFindExistingBuffer(BufferManager *bm, BlockID *blockId) {
+    for (int i = 0; i < bm->bufferSize; i++) {
         Buffer *buf = *(Buffer **)CVectorAt(bm->bufferPool, i);
-        if(buf->blockId && BlockIDEqual(blockId, buf->blockId)){
+        if (buf->blockId && BlockIDEqual(blockId, buf->blockId)) {
             return buf;
         }
     }
     return NULL;
 }
 
- bool BufferManagerWaitTooLong(long start){
+bool BufferManagerWaitTooLong(long start) {
     return time(NULL) - start > MAX_TIME;
 }
 
@@ -55,23 +52,22 @@ Buffer *BufferManagerTryToPin(BufferManager *bm, BlockID *blockId) {
     return buffer;
 }
 
-
 BufferManager *BufferManagerInit(
     FileManager *fileManager,
     LogManager *logManager,
     int numBuffs,
     ReplacementPolicy *policy
-){
+) {
     BufferManager *bm = malloc(sizeof(BufferManager));
     bm->bufferSize = numBuffs;
     bm->numAvailable = numBuffs;
     if (policy)
         bm->policy = policy;
-    else{
+    else {
         bm->policy = LRUPolicyCreate(numBuffs);
     }
     bm->bufferPool = CVectorInit(sizeof(Buffer *), NULL, NULL, NULL);
-    for(int i = 0; i < numBuffs; i++){
+    for (int i = 0; i < numBuffs; i++) {
         Buffer *buf = BufferInit(fileManager, logManager);
         buf->frame_id = i;
         CVectorPushBack(bm->bufferPool, &buf);
@@ -79,37 +75,36 @@ BufferManager *BufferManagerInit(
     return bm;
 }
 
-void
-BufferManagerFlushAll(BufferManager *bm, int tx){
-    for(int i = 0; i < bm->bufferSize; i++){
+void BufferManagerFlushAll(BufferManager *bm, int tx) {
+    for (int i = 0; i < bm->bufferSize; i++) {
         Buffer *buf = *(Buffer **)CVectorAt(bm->bufferPool, i);
-        if(buf->blockId && buf->txNum == tx)
+        if (buf->blockId && buf->txNum == tx)
             BufferFlush(buf);
     }
 }
 
-void
-BufferManagerUnpin(BufferManager *bm, Buffer *buffer){
+void BufferManagerUnpin(BufferManager *bm, Buffer *buffer) {
     int wasPinned = BufferIsPinned(buffer);
     BufferUnPin(buffer);
 
-    if(wasPinned && buffer->pins == 0){
+    if (wasPinned && buffer->pins == 0) {
         bm->numAvailable++;
         bm->policy->remove(bm->policy->impl, buffer->frame_id);
     }
 }
 
-Buffer *BufferManagerPin(BufferManager *bm, BlockID *blockId){
+Buffer *BufferManagerPin(BufferManager *bm, BlockID *blockId) {
     long start = time(NULL);
     Buffer *buf;
 
-    while((buf = BufferManagerTryToPin(bm, blockId)) == NULL){
-        if(BufferManagerWaitTooLong(start))
+    while ((buf = BufferManagerTryToPin(bm, blockId)) == NULL) {
+        if (BufferManagerWaitTooLong(start))
             return NULL;
         sleep(1);
     }
     return buf;
 }
+
 Buffer* BufferManagerChooseUnPinnedBuffer(BufferManager* bm) {
     for (int i = 0; i < bm->bufferSize; i++) {
         Buffer* buf = *(Buffer**)CVectorAt(bm->bufferPool, i);

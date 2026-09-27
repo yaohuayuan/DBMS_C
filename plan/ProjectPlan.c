@@ -3,10 +3,15 @@
 //
 
 #include "ProjectPlan.h"
+#include "ProjectScan.h"
+
+static bool CStringListEquals(const void *a, const void *b) {
+    return CStringEqual((const CString *)a, (const CString *)b) != 0;
+}
 
 
 
-ProjectPlan *ProjectPlanInit(Plan* plan, List* fieldlist) {
+ProjectPlan *ProjectPlanInit(Plan* plan, CList* fieldlist) {
     ProjectPlan *projectPlan = malloc(sizeof(ProjectPlan));
     projectPlan->p = plan;
     projectPlan->schema = SchemaInit();
@@ -14,9 +19,9 @@ ProjectPlan *ProjectPlanInit(Plan* plan, List* fieldlist) {
     // ⭐ 先拿一次子计划的 Schema，避免在循环里递归调用
     Schema *inputSchema = plan->schema(plan);
 
-    ListNode *head = fieldlist->head;
+    CListNode *head = fieldlist->head;
     while(head) {
-        CString *fldname = head->value.stringData;
+        CString *fldname = ((CString *)head->data);
 
         // ⭐ 增加去重判断：如果 ProjectPlan 的 Schema 里已经有了这个字段，就不加了
         if (!SchemaHasField(projectPlan->schema, fldname)) {
@@ -32,14 +37,14 @@ Scan* ProjectPlanOpen(void *data){
     Plan*plan = (Plan*)data;
     ProjectPlan * projectPlan = plan->planUnion.projectPlan;
     Scan *s1 = projectPlan->p->open(projectPlan->p);
-    
-    List *fieldlist = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+
+    CList *fieldlist = CListInit(NULL, CStringListEquals, NULL);
     Schema* schema = projectPlan->schema;
-    FieldNode *current = schema->fields;  // 从头开始
+    FieldNode *current = schema->fields; // 从头开始
     while (current) {
         // 复制字段名，因为current->fileName可能会被后续操作修改或释放
         CString *fldname = CStringCreateFromCString(current->fileName);
-        ListAppend(fieldlist, fldname);
+        CListAppend(fieldlist, fldname);
         current = current->next;
     }
     ProjectScan *projectScan = ProjectScanInit(s1, fieldlist);

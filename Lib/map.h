@@ -16,8 +16,7 @@
 
 #define MAP_VERSION "0.1.0"
 
-/// @brief 链表节点结构体定义。
-struct map_node_t;
+ /// @brief 链表节点结构体定义。
 typedef struct map_node_t map_node_t;
 
 /**
@@ -34,7 +33,7 @@ typedef struct {
  */
 typedef struct {
     unsigned bucketidx;   ///< 当前迭代的桶索引
-    map_node_t *node;     ///< 当前迭代的节点指针
+    map_node_t *node; ///< 当前迭代的节点指针
 } map_iter_t;
 
 /**

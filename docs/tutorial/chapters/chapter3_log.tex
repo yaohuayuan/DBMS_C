@@ -4,7 +4,7 @@
 \section{实验目的}
 \label{sec:log-purpose}
 
-本章用于理解 DBMS\_C 如何通过 \codepath{LogManager} 组织日志记录，为后续事务提交、回滚和恢复机制提供基础。日志管理层并不直接解释事务语义，也不执行恢复算法；它的职责是把一条条日志记录追加到日志文件中，在需要时刷盘，并提供从后向前读取日志记录的基础能力。
+本章用于理解 DBMS\_C 如何通过 \codepath{LogManager} 组织日志记录，为事务提交、回滚和恢复机制提供基础。日志管理层并不直接解释事务语义，也不执行恢复算法；它的职责是把一条条日志记录追加到日志文件中，在需要时刷盘，并提供从后向前读取日志记录的基础能力。
 
 本章实验只覆盖 \codepath{Log/LogManager.h} 和 \codepath{Log/LogManager.c} 中已经存在的真实接口：初始化日志管理器、追加日志记录、flush 日志页、通过 \codepath{LogIterator} 读取日志记录，以及重新打开后读回已经刷盘的日志内容。
 
@@ -235,7 +235,7 @@ ByteBuffer* LogIteratorNext(LogIterator* it) {
 \section{运行与观察}
 \label{sec:log-run}
 
-在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建和测试：
+进入项目根目录后，使用固定命令构建和测试：
 
 \begin{dbcode}[listing options={language=bash}]{构建并运行 Log 相关测试}
 cmake -S . -B build
@@ -253,16 +253,19 @@ ctest --test-dir build --output-on-failure -R LogManagerBasicTest
 
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.92\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=9mm and 12mm]
+  \resizebox{0.4\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=10mm,
+    every node/.style={align=center}
+  ]
     \node[dbnode] (payload) {payload bytes};
-    \node[dbnode, right=of payload] (append) {LogManagerAppend};
-    \node[dbnode, right=of append] (page) {logPage\\header + payload};
-    \node[dbnode, right=of page] (flush) {LogManagerFlush};
-    \node[dbnode, right=of flush] (file) {FileManagerWrite\\test\_logfile.log};
+    \node[dbnode, below=of payload] (append) {LogManagerAppend};
+    \node[dbnode, below=of append] (page) {logPage\\header + payload};
+    \node[dbnode, below=of page] (flush) {LogManagerFlush};
+    \node[dbnode, below=of flush] (file) {FileManagerWrite\\test\_logfile.log};
 
     \draw[dbarrow] (payload) -- (append);
-    \draw[dbarrow] (append) -- node[above,font=\footnotesize] {更新 boundary/LSN} (page);
+    \draw[dbarrow] (append) -- node[midway, right=2pt, font=\footnotesize, fill=white, inner sep=1pt] {更新 boundary/LSN} (page);
     \draw[dbarrow] (page) -- (flush);
     \draw[dbarrow] (flush) -- (file);
   \end{tikzpicture}}

@@ -14,11 +14,11 @@
  */
 typedef enum {
     STT_EOF = 0,
-    STT_WORD,       // 标识符/关键字 (SELECT, name)
+    STT_WORD, // 标识符/关键字 (SELECT, name)
     STT_NUMBER,     // 整数 (123, 99999999)
-    STT_STRING,     // 字符串 ('Alice')
+    STT_STRING, // 字符串 ('Alice')
     STT_DELIM,      // 运算符和符号 (>=, <=, !=, <>, =, ,, ;)
-    STT_ERROR       // 错误 (未闭合的引号等)
+    STT_ERROR // 错误 (未闭合的引号等)
 } StreamTokenType;
 
 /**
@@ -26,10 +26,10 @@ typedef enum {
  */
 typedef struct {
     const char *input;      // 原始输入
-    const char *pos;        // 当前游标
+    const char *pos; // 当前游标
     const char *start;      // 当前 Token 起始指针
     int length;             // 当前 Token 长度
-    long long intValue;     // 升级为 long long 防止溢出
+    long long intValue; // 升级为 long long 防止溢出
     StreamTokenType type;   // 当前 Token 类型
 } StreamTokenizer;
 

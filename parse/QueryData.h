@@ -4,14 +4,14 @@
 
 #ifndef DBMS_C_QUERYDATA_H
 #define DBMS_C_QUERYDATA_H
-#include "List.h"
+#include "CList.h"
 #include "Predicate.h"
 /**
  * @brief QueryData 结构体定义，用于存储查询操作的数据。
  */
 typedef struct QueryData{
-    List *fields;    ///< 查询的字段列表
-    List* tables;    ///< 查询的表列表
+    CList *fields;    ///< 查询的字段列
+    CList* tables;    ///< 查询的表列表
     Predicate *predicate; ///< 查询条件
 }QueryData;
 
@@ -23,7 +23,7 @@ typedef struct QueryData{
  * @param predicate 查询条件。
  * @return 返回初始化后的 QueryData 指针。
  */
-QueryData *QueryDataInit(List*fields,List*tables,Predicate *predicate);
+QueryData *QueryDataInit(CList*fields,CList*tables,Predicate *predicate);
 
 /**
  * @brief 将 QueryData 转换为字符串表示。

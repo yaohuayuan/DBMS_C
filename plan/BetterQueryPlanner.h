@@ -7,7 +7,7 @@
 #include "MetadataManager.h"
 #include "QueryData.h"
 #include "Plan.h"
-#include "List.h"
+#include "CList.h"
 #include "Transaction.h"
 /**
  * @brief BasicQueryPlanner 结构体定义，用于实现基本的查询计划生成器。
@@ -42,7 +42,7 @@ Plan *betterQueryPlannerCreatPlan(BetterQueryPlanner*basicQueryPlanner,QueryData
  * @param joinTerms 连接条件列表。
  * @return 返回连接成本。
  */
-int EstimateJoinCost(Plan *left, Plan *right, List *joinTerms);
+int EstimateJoinCost(Plan *left, Plan *right, CList *joinTerms);
 
 /**
  * @brief 移除记录数最小的计划。
@@ -50,7 +50,7 @@ int EstimateJoinCost(Plan *left, Plan *right, List *joinTerms);
  * @param plans 计划列表。
  * @return 返回移除的计划。
  */
-Plan* RemoveSmallestRecordsPlan(List *plans);
+Plan* RemoveSmallestRecordsPlan(CList *plans);
 
 /**
  * @brief 贪心连接算法。
@@ -59,5 +59,5 @@ Plan* RemoveSmallestRecordsPlan(List *plans);
  * @param joinTerms 连接条件列表。
  * @return 返回连接后的计划。
  */
-Plan* GreedyJoin(List *basePlans, List *joinTerms);
+Plan* GreedyJoin(CList *basePlans, CList *joinTerms);
 #endif //DBMS_C_BETTERQUERYPLANNER_H

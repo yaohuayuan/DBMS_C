@@ -1,6 +1,10 @@
 #include "Schema.h"
 
-#include "List.h"
+#include "CList.h"
+
+static bool CStringListEquals(const void *a, const void *b) {
+    return CStringEqual((const CString *)a, (const CString *)b) != 0;
+}
 
 // 初始化FileInfo
 FileInfo *FileInfoInit(int type, int length) {
@@ -135,12 +139,12 @@ bool SchemaHasField(Schema *schema, CString *FldName){
     }
     return false;
 }
-List* SchemaGetAllFields(Schema *schema) {
-    List *l = ListInit(LIST_TYPE_STRING, NULL, NULL, NULL);
+CList* SchemaGetAllFields(Schema *schema) {
+    CList *l = CListInit(NULL, CStringListEquals, NULL);
 
     FieldNode *node = schema->fields;
     while (node) {
-        ListAppend(l, CStringCreateFromCStr(CStringGetPtr(node->fileName)));
+        CListAppend(l, CStringCreateFromCStr(CStringGetPtr(node->fileName)));
         node = node->next;
     }
 

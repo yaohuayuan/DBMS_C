@@ -5,7 +5,7 @@
 #ifndef DBMS_C_LAYOUT_H
 #define DBMS_C_LAYOUT_H
 #include "Schema.h"
-#include"Page.h"
+#include "Page.h"
 #include "CString.h"
 /**
  * @brief Layout 结构体，用于表示表的布局信息，包括模式、字段偏移量和记录槽大小。

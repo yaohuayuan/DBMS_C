@@ -4,7 +4,7 @@
 
 #ifndef DBMS_C_RID_H
 #define DBMS_C_RID_H
-#include "malloc.h"
+#include <stdlib.h>
 #include "stdbool.h"
 #include "string.h"
 #include <stdio.h>

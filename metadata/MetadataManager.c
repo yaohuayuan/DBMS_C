@@ -11,7 +11,7 @@ MetadataMgr* MetadataMgrInit(bool isNew, Transaction *tx) {
     MetadataMgr *mdMgr = (MetadataMgr*)malloc(sizeof(MetadataMgr));
     mdMgr->tblMgr = TableManagerInit(isNew, tx);
     mdMgr->viewMgr = ViewManagerInit(isNew, mdMgr->tblMgr, tx);
-    mdMgr->statMgr = StartManagerInit(mdMgr->tblMgr, tx);
+    mdMgr->statMgr = StatManagerInit(mdMgr->tblMgr, tx);
     mdMgr->idxMgr = IndexMgrInit(isNew, mdMgr->tblMgr, mdMgr->statMgr, tx);
     return mdMgr;
 }
@@ -48,8 +48,7 @@ map_IndexInfo_t* MetadataManagerGetIndexInfo(MetadataMgr *mdMgr, CString *tblnam
 
 // 获取统计信息
 StatInfo* MetadataMgrGetStatInfo(MetadataMgr *mdMgr, CString *tblname, Layout *layout, Transaction *tx) {
-    return StartManagerGetStatInfo(mdMgr->statMgr, CStringGetPtr(tblname), layout, tx);
+    return StatManagerGetStatInfo(mdMgr->statMgr, CStringGetPtr(tblname), layout, tx);
 }
 
 // 释放 MetadataMgr
-

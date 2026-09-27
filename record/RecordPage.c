@@ -45,22 +45,16 @@ bool RecordPageIsValidSlot(RecordPage*recordPage,int slot){
 }
 int RecordPageSearchAfter(RecordPage*recordPage, int slot, int flag) {
     slot++;
-//    printf("DEBUG: RecordPageSearchAfter - ��ʼ������slot %d, ����flag %d\n", slot, flag);
 
     while (RecordPageIsValidSlot(recordPage, slot)) {
         int offset = RecordPageOffset(recordPage, slot);
         int currentFlag = TransactionGetInt(recordPage->transaction, recordPage->blockId, offset);
 
-//        printf("DEBUG: slot %d, offset %d, ��ȡ����flag %d, ����flag %d\n",
-//               slot, offset, currentFlag, flag);
-
         if(currentFlag == flag) {
-//            printf("DEBUG: �ҵ�ƥ���slot %d\n", slot);
             return slot;
         }
         slot++;
     }
-//    printf("DEBUG: û���ҵ�ƥ���slot\n");
     return -1;
 }
 void RecordPageFormat(RecordPage *recordPage){
@@ -71,8 +65,6 @@ void RecordPageFormat(RecordPage *recordPage){
         FieldNode*fieldNode = schema->fields;
         while (fieldNode!=NULL){
             int offset = RecordPageOffset(recordPage, slot);
-//            printf("DEBUG: ��ʽ��slot %d, offset %d, ����flagΪ %d\n",
-//                   slot, offset, RECORD_PAGE_EMPTY);
             CString *fldName = fieldNode->fileName;
             int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
             if(SchemaType(schema,fldName)==FILE_INFO_CODE_INTEGER){
@@ -84,7 +76,6 @@ void RecordPageFormat(RecordPage *recordPage){
         }
         slot++;
     }
-//    printf("DEBUG: RecordPageFormat - ��ʽ�����\n");
 }
 int RecordPageInsertAfter(RecordPage*recordPage,int slot){
     int newSlot = RecordPageSearchAfter(recordPage,slot,RECORD_PAGE_EMPTY);

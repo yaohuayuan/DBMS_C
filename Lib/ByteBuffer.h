@@ -5,7 +5,7 @@
 #ifndef NEWDBMS_BYTEBUFFER_H
 #define NEWDBMS_BYTEBUFFER_H
 #include <stdint.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include "CString.h"
 
 typedef struct ByteBuffer{
@@ -16,8 +16,8 @@ typedef struct ByteBuffer{
 }ByteBuffer;
 typedef enum {
     BYTEBUFFER_OK = 0,        ///< 操作成功
-    BYTEBUFFER_ERROR_NULL,    ///< 空指针错误
-    BYTEBUFFER_ERROR_BOUNDS,  ///< 越界访问错误
+    BYTEBUFFER_ERROR_NULL, ///< 空指针错误
+    BYTEBUFFER_ERROR_BOUNDS, ///< 越界访问错误
 } ByteBufferError;
 
 /**
@@ -262,7 +262,7 @@ uint64_t bufferPosition(ByteBuffer* buffer, uint64_t newPosition);
  * @param size 数据长度（字节数）。
  * @return 如果写入成功，返回 BYTEBUFFER_OK；否则返回相应的错误代码。
  */
-ByteBufferError bufferPutBytesPosition(ByteBuffer* buffer, uint64_t position, uint8_t* data, uint64_t size);
+ByteBufferError bufferPutBytesPosition(ByteBuffer* buffer, uint64_t position, const uint8_t* data, uint64_t size);
 
 /**
  * @brief 将一段字节数组写入缓冲区当前位置。
@@ -272,7 +272,7 @@ ByteBufferError bufferPutBytesPosition(ByteBuffer* buffer, uint64_t position, ui
  * @param size 数据长度（字节数）。
  * @return 如果写入成功，返回 BYTEBUFFER_OK；否则返回相应的错误代码。
  */
-ByteBufferError bufferPutBytes(ByteBuffer* buffer, uint8_t* data, uint64_t size);
+ByteBufferError bufferPutBytes(ByteBuffer* buffer, const uint8_t* data, uint64_t size);
 
 /**
  * @brief 使用指定大小和数据初始化一个新的 ByteBuffer 实例。

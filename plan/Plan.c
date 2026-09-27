@@ -83,7 +83,7 @@ bool PlanContainsTable(Plan *plan, CString *tableName) {
             // 乘积计划：检查左右两个子计划
             ProductPlan *productPlan = plan->planUnion.productPlan;
             if (productPlan) {
-                return PlanContainsTable(productPlan->p1, tableName) || 
+                return PlanContainsTable(productPlan->p1, tableName) ||
                        PlanContainsTable(productPlan->p2, tableName);
             }
             return false;

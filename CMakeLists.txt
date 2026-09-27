@@ -265,7 +265,7 @@ if(HAVE_CMOCKA)
     add_cmocka_test(BufferManagerBasicTest ${TEST_DIR}/buffer/BufferManagerBasicTest.c)
 
     # TX 模块测试
-    add_cmocka_test(TranstionTest ${TEST_DIR}/tx/TranstionTest.c)
+    add_cmocka_test(TransactionTest ${TEST_DIR}/tx/TransactionTest.c)
     add_cmocka_test(TransactionBasicTest ${TEST_DIR}/tx/TransactionBasicTest.c)
     add_cmocka_test(ConcurrencyBasicTest ${TEST_DIR}/tx/ConcurrencyBasicTest.c)
     add_cmocka_test(RecoveryBasicTest ${TEST_DIR}/tx/RecoveryBasicTest.c)

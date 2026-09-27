@@ -3,7 +3,7 @@
 //
 
 #include "CreateIndexData.h"
-#include "malloc.h"
+#include <stdlib.h>
 #include "string.h"
 CreateIndexData *CreateIndexDataInit(CString *idxname,CString *tblname,CString *fldname){
     CreateIndexData *createIndexData = malloc(sizeof(CreateIndexData));

@@ -39,7 +39,7 @@
   \end{tabularx}
 \end{table}
 
-这些文件共同形成记录管理层的最小工作面。暂不展开的后续模块包括 \codepath{metadata/}、\codepath{parse/}、\codepath{plan/} 和 \codepath{query/} 中的查询组合逻辑，它们会在后续章节基于新的 CTest 单独说明。
+这些文件共同形成记录管理层的最小工作面。与记录层相邻的 \codepath{metadata/}、\codepath{parse/}、\codepath{plan/} 和 \codepath{query/} 模块，分别在第7章到第9章中结合各自的测试和执行链路说明。
 
 \section{核心对象职责}
 \label{sec:record-objects}
@@ -97,7 +97,7 @@
 
 \codepath{RID} 是记录标识符，只保存两个整数：\codepath{BlockNum} 和 \codepath{Slot}。它不保存表名，因为 TableScan 已经知道自己正在扫描哪个表文件；当需要定位表内某条记录时，block number 指向文件中的块号，slot 指向该块中的记录槽号。
 
-本章测试只验证 RID 的最小行为：初始化后能保存 block 和 slot，两个 RID 能比较是否相等，\apiname{RIDToString} 能生成类似 \codepath{(3,7)} 的字符串形式。更复杂的 RID 定位路径与 \codepath{TableScanMoveToRid} 有关，本轮不把它作为测试目标。
+本章测试只验证 RID 的最小行为：初始化后能保存 block 和 slot，两个 RID 能比较是否相等，\apiname{RIDToString} 能生成类似 \codepath{(3,7)} 的字符串形式。更复杂的 RID 定位路径与 \codepath{TableScanMoveToRid} 有关，本章不把它作为测试目标。
 
 \section{RecordPage 的 slot 生命周期}
 \label{sec:record-page}
@@ -109,7 +109,7 @@
 \begin{figure}[htbp]
   \centering
   \resizebox{0.92\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=9mm and 13mm]
+  \begin{tikzpicture}[node distance=6mm and 9mm]
     \node[dbnode] (format) {RecordPageFormat\\flag = EMPTY};
     \node[dbnode, right=of format] (insert) {InsertAfter\\find empty slot};
     \node[dbnode, right=of insert] (used) {flag = USED};
@@ -271,7 +271,7 @@ if(TransactionSize(transaction, filename) == 0){
 \section{运行与观察}
 \label{sec:record-run}
 
-在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建并运行测试：
+进入项目根目录后，使用固定命令构建并运行测试：
 
 \begin{dbcode}[listing options={language=bash}]{构建并运行 Record 测试}
 cmake -S . -B build

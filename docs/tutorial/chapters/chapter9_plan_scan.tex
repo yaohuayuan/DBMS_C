@@ -109,7 +109,7 @@ select id, name from student_plan where id = 1
 
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.78\textwidth}{!}{%
+  \resizebox{0.5\textwidth}{!}{%
   \begin{tikzpicture}[node distance=8mm and 12mm]
     \node[dblevel] (query) {QueryData\\student\_plan, id=1};
     \node[dbnode, below=of query] (table) {TablePlan\\table=student\_plan};
@@ -192,7 +192,7 @@ select id, name from student_plan where id = 1
     测试函数 & 主要断言 \\
     \midrule
     \codepath{test_basic_query_planner_select_project_scan} & 断言 Plan 非空；最外层 Plan 为 \codepath{PLAN_PROJECT_CODE}；内部依次为 \codepath{PLAN_SELECT_CODE} 和 \codepath{PLAN_TABLE_CODE}；open 后 Scan 非空且最外层为 \codepath{SCAN_PROJECT_CODE}；通过公开 Scan 接口读回 \codepath{id=1,name=wang}，并断言没有第二条匹配结果。\\
-    \codepath{test_plan_open_returns_scan_for_query_result} & 断言 Plan 非空；open 返回 Scan 非空；Scan 最外层为 \codepath{SCAN_PROJECT_CODE}；通过 \codepath{hasField/next/getInt/getString} 验证查询结果，不访问 ProjectScan 或 SelectScan 内部字段。\\
+    \codepath{test_plan_open_returns_scan_for_query_result} & 断言 Plan 非空；open 返回 Scan 非空；Scan 最外层为 \codepath{SCAN_PROJECT_CODE}；通过 \codepath{hasField}、\codepath{next}、\codepath{getInt}、\codepath{getString} 验证查询结果，不访问 ProjectScan 或 SelectScan 内部字段。\\
     \bottomrule
   \end{tabularx}
 \end{table}

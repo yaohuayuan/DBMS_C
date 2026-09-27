@@ -4,14 +4,15 @@
 
 #ifndef DBMS_C_INSERTDATA_H
 #define DBMS_C_INSERTDATA_H
-#include "List.h"
+#include "CList.h"
+#include "CString.h"
 /**
  * @brief InsertData 结构体定义，用于存储插入操作的数据。
  */
 typedef struct InsertData{
     CString *tblname; ///< 要插入记录的表名称
-    List  *vals;   ///< 要插入的值列表
-    List *flds;    ///< 要插入的字段列表
+    CList  *vals;   ///< 要插入的值列
+    CList *flds;    ///< 要插入的字段列表
 }InsertData;
 
 /**
@@ -22,5 +23,5 @@ typedef struct InsertData{
  * @param vals 要插入的值列表。
  * @return 返回初始化后的 InsertData 指针。
  */
-InsertData *InsertDataInit(CString *tblname,List *fld,List *vals);
+InsertData *InsertDataInit(CString *tblname,CList *fld,CList *vals);
 #endif //DBMS_C_INSERTDATA_H

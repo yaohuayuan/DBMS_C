@@ -20,7 +20,7 @@ typedef struct SelectPlan SelectPlan;
  */
 typedef enum PLAN_CODE{
     PLAN_SELECT_CODE,         ///< 选择计划类型
-    PLAN_TABLE_CODE,          ///< 表计划类型
+    PLAN_TABLE_CODE, ///< 表计划类型
     PLAN_BASIC_QUERY_CODE,    ///< 基本查询计划类型
     PLAN_BASIC_UPDATE_CODE,   ///< 基本更新计划类型
     PLAN_OPTIMIZED_PRODUCT_CODE, ///< 优化后的乘积计划类型
@@ -33,7 +33,7 @@ typedef enum PLAN_CODE{
  */
 typedef union PlanUnion {
     ProjectPlan *projectPlan;   ///< 投影计划
-    TablePlan *tablePlan;       ///< 表计划
+    TablePlan *tablePlan; ///< 表计划
     ProductPlan* productPlan;   ///< 乘积计划
     SelectPlan* selectPlan;     ///< 选择计划
 } PlanUnion;
@@ -43,10 +43,10 @@ typedef union PlanUnion {
  */
 typedef struct Plan{
     Scan *(*open)(void *plan);             ///< 打开扫描器的函数指针
-    int (*blocksAccessed)(void *plan);     ///< 计算访问块数的函数指针
+    int (*blocksAccessed)(void *plan); ///< 计算访问块数的函数指针
     int (*recordsOutput)(void *data);      ///< 计算输出记录数的函数指针
     int (*distinctValues)(void *data,CString *fldname); ///< 计算不同值数量的函数指针
-    Schema *(*schema)(void *data);         ///< 获取模式信息的函数指针
+    Schema *(*schema)(void *data); ///< 获取模式信息的函数指针
 
     PLAN_CODE code;         ///< 计划类型
     PlanUnion planUnion;    ///< 计划数据联合

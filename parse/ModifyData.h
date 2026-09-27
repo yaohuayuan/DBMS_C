@@ -10,7 +10,7 @@
  * @brief ModifyData 结构体定义，用于存储修改操作的数据。
  */
 typedef struct ModifyData{
-    CString *tblname;  ///< 要修改记录的表名称
+    CString *tblname; ///< 要修改记录的表名称
     CString *fldname;  ///< 要修改的字段名称
     Expression *newVal; ///< 新值的表达式
     Predicate *predicate; ///< 修改条件，只有满足条件的记录才会被修改

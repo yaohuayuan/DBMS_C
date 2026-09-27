@@ -17,8 +17,8 @@
 typedef struct TableScan{
     Transaction *transaction;  ///< 事务指针
     Layout *layout;           ///< 表布局
-    RecordPage *recordPage;    ///< 当前记录页
-    CString *fileName;           ///< 文件名
+    RecordPage *recordPage; ///< 当前记录页
+    CString *fileName; ///< 文件名
     int currentSlot;          ///< 当前槽号
 //    UpdateScan *updateScan;   ///< 更新扫描器（已注释）
 }TableScan;
@@ -125,7 +125,7 @@ int TableScanGetInt(void *data,CString *fileName);
  * @param fileName 字段名。
  * @return 返回字段的字符串值。
  */
-char* TableScanGetString(void *data,CString *fileName);
+const char* TableScanGetString(void *data,CString *fileName);
 
 /**
  * @brief 设置指定字段的整数值。

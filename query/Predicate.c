@@ -7,20 +7,20 @@
 Predicate *PredicateInit(Term* term){
     Predicate *predicate = malloc(sizeof (Predicate));
     if(term==NULL){
-        predicate->terms = ListInit(LIST_TYPE_TERM, NULL, NULL, NULL);
+        predicate->terms = CListInit(NULL, NULL, NULL);
     }else{
-        predicate->terms = ListInit(LIST_TYPE_TERM, NULL, NULL, NULL);
-        ListAppend(predicate->terms, term);
+        predicate->terms = CListInit(NULL, NULL, NULL);
+        CListAppend(predicate->terms, term);
     }
     return predicate;
 }
 void PredicateConjoinWith(Predicate*predicate,Predicate*predicate1){
-    ListAddAll(predicate->terms,predicate1->terms);
+    CListAddAll(predicate->terms,predicate1->terms);
 }
 bool PredicateIsSatisfied(Predicate*predicate,Scan*scan){
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     while(p){
-        if(!TermIsSatisfied(p->value.termData,scan)){
+        if(!TermIsSatisfied(((Term *)p->data),scan)){
             return false;
         }
         p=p->next;
@@ -29,19 +29,19 @@ bool PredicateIsSatisfied(Predicate*predicate,Scan*scan){
 }
 int PredicateReductionFactor(Predicate*predicate,Plan*plan){
     int factor = 1;
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     while(p){
-        factor*= TermReductionFactor(p->value.termData,plan);
+        factor*= TermReductionFactor(((Term *)p->data),plan);
         p=p->next;
     }
     return factor;
 }
 Predicate *PredicateSelectSubPred(Predicate*predicate,Schema*schema){
     Predicate *result = PredicateInit(NULL);
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     while(p){
-        if(TermAppliesTo(p->value.termData,schema)){
-            ListAppend(result->terms,p->value.termData);
+        if(TermAppliesTo(((Term *)p->data),schema)){
+            CListAppend(result->terms,((Term *)p->data));
         }
         p=p->next;
     }
@@ -55,12 +55,12 @@ Predicate* PredicateJoinSubPred(Predicate*predicate,Schema *schema1,Schema *sche
     Schema *newSch = SchemaInit();
     SchemaAddAll(newSch,schema1);
     SchemaAddAll(newSch,schema2);
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     while(p){
-        if(!TermAppliesTo(p->value.termData,schema1)&&
-            !TermAppliesTo(p->value.termData,schema2) &&
-            TermAppliesTo(p->value.termData,newSch)){
-            ListAppend(result->terms,p->value.termData);
+        if(!TermAppliesTo(((Term *)p->data),schema1)&&
+            !TermAppliesTo(((Term *)p->data),schema2) &&
+            TermAppliesTo(((Term *)p->data),newSch)){
+            CListAppend(result->terms,((Term *)p->data));
         }
         p=p->next;
     }
@@ -70,9 +70,9 @@ Predicate* PredicateJoinSubPred(Predicate*predicate,Schema *schema1,Schema *sche
         return result;
 }
 Constant *PredicateEquatesWithConstant(Predicate*predicate,CString *fldname){
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     while(p){
-        Constant *c = TermEquatesWithConstant(p->value.termData,fldname);
+        Constant *c = TermEquatesWithConstant(((Term *)p->data),fldname);
         if(c!=NULL){
             return c;
         }
@@ -81,9 +81,9 @@ Constant *PredicateEquatesWithConstant(Predicate*predicate,CString *fldname){
     return NULL;
 }
 CString *PredicateEquatesWithField(Predicate*predicate,CString *fldname){
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     while(p){
-        CString *c = TermEquatesWithField(p->value.termData,fldname);
+        CString *c = TermEquatesWithField(((Term *)p->data),fldname);
         if(c!=NULL){
             return c;
         }
@@ -92,14 +92,14 @@ CString *PredicateEquatesWithField(Predicate*predicate,CString *fldname){
     return NULL;
 }
 char *PredicateToString(Predicate*predicate){
-    ListNode *p = predicate->terms->head;
+    CListNode *p = predicate->terms->head;
     if(p==NULL)
         return strdup("");
     size_t totalLen = 1;
     while (p) {
-        char *termStr = TermToString(p->value.termData);
+        char *termStr = TermToString(((Term *)p->data));
         totalLen += strlen(termStr);
-        free(termStr);  // 释放临时字符串
+        free(termStr); // 释放临时字符串
         p = p->next;
     }
 
@@ -114,13 +114,13 @@ char *PredicateToString(Predicate*predicate){
     // 拼接字符串
     p = predicate->terms->head;
     while (p) {
-        char *termStr = TermToString(p->value.termData);
+        char *termStr = TermToString(((Term *)p->data));
         strcat(result, termStr);
-        free(termStr);  // 释放临时字符串
+        free(termStr); // 释放临时字符串
         p = p->next;
     }
 
-    return result;  // 返回拼接后的字符串
+    return result; // 返回拼接后的字符串
 }
 
 // 释放Predicate资源
@@ -129,7 +129,7 @@ void PredicateFree(Predicate *predicate) {
     
     // 释放terms列表
     if (predicate->terms) {
-        ListFree(predicate->terms);
+        CListFree(predicate->terms);
     }
     
     free(predicate);

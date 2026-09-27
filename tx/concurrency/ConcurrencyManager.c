@@ -53,7 +53,7 @@ void ConCurrencyManagerXLock(ConCurrencyManager *mgr, BlockID *blockId) {
 void ConCurrencyManagerRelease(ConCurrencyManager *conCurrencyManager){
     const char *key;
     map_iter_t iter = map_iter(conCurrencyManager->mapStr);
-    const char *keys_to_remove[conCurrencyManager->mapStr->base.nnodes];  // 临时存储要删除的键
+    const char *keys_to_remove[conCurrencyManager->mapStr->base.nnodes]; // 临时存储要删除的键
     int index = 0;
     while ((key = map_next(conCurrencyManager->mapStr, &iter))) {
 //        printf("[DEBUG] Releasing lock for key: %s\n", key);  // 调试打印

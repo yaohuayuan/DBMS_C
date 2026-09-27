@@ -6,23 +6,23 @@
 
 本章用于理解 DBMS\_C 中事务层的基本职责。事务并不是单独完成读写的模块，它会把文件层、日志层、缓冲区层、并发控制层和恢复层组织在一起，对上层提供相对统一的读写入口。
 
-本章当前已经完成三个基础阶段：5A 验证 \codepath{Transaction} 如何通过 \codepath{BufferList} 使用 \codepath{BufferManager}，并在提交时把修改写回到底层文件；5B 验证 \codepath{LockTable} 和 \codepath{ConCurrencyManager} 的基础加锁与释放行为；5C 验证 \codepath{RecoveryManager} 通过旧值日志完成最小整数回滚。死锁检测和崩溃恢复属于后续扩展内容，本章只保留边界说明，不提前展开。
+本章包含三个基础阶段：5A 验证 \codepath{Transaction} 如何通过 \codepath{BufferList} 使用 \codepath{BufferManager}，并在提交时把修改写回到底层文件；5B 验证 \codepath{LockTable} 和 \codepath{ConCurrencyManager} 的基础加锁与释放行为；5C 验证 \codepath{RecoveryManager} 通过旧值日志完成最小整数回滚。死锁检测和崩溃恢复作为可继续扩展的方向，本章只保留边界说明，不提前展开。
 
 \section{模块作用}
 \label{sec:tx-role}
 
 \codepath{tx/} 模块位于查询执行、记录管理和底层缓冲区管理之间。上层模块不需要直接操作每一个 \codepath{Buffer}，而是可以通过事务接口 pin 块、读取页内数据、写入页内数据、提交或回滚事务。
 
-在当前实现中，\codepath{Transaction} 初始化时会创建三个重要的协作对象：\codepath{RecoveryManager}、\codepath{ConCurrencyManager} 和 \codepath{BufferList}。其中 \codepath{BufferList} 记录当前事务已经 pin 的块和对应 Buffer，使事务可以在后续读写时找到已经固定的缓冲页。
+在当前实现中，\codepath{Transaction} 初始化时会创建三个重要的协作对象：\codepath{RecoveryManager}、\codepath{ConCurrencyManager} 和 \codepath{BufferList}。其中 \codepath{BufferList} 记录当前事务已经 pin 的块和对应 Buffer，使事务可以在之后读写时找到已经固定的缓冲页。
 
 \section{相关源码文件}
 \label{sec:tx-source-files}
 
-表 \ref{tab:tx-source-files} 列出本轮事务基础实验涉及的真实源码文件。锁和恢复相关文件虽然会被 \codepath{Transaction} 调用，但本轮只说明它们在事务对象中的位置，不测试其内部细节。
+表 \ref{tab:tx-source-files} 列出事务、并发与恢复实验涉及的真实源码文件。锁和恢复相关文件会被 \codepath{Transaction} 调用，并在本章 5B、5C 中分别说明基础行为。
 
 \begin{table}[htbp]
   \centering
-  \caption{Transaction 基础实验相关源码文件}
+  \caption{事务、并发与恢复实验相关源码文件}
   \label{tab:tx-source-files}
   \begin{tabularx}{\textwidth}{>{\ttfamily}l Y}
     \toprule
@@ -35,18 +35,26 @@
     buffer/BufferManager.h & 提供缓冲区池、pin/unpin、flush 等能力。\\
     File/FileManager.h & 提供文件块读写能力，是提交后验证持久化结果的基础。\\
     Log/LogManager.h & 为 RecoveryManager 写入事务日志提供底层日志管理能力。\\
-    tx/concurrency/ConcurrencyManager.h & 被 Transaction 调用以申请读写锁；本轮不展开锁实现。\\
-    tx/recovery/RecoveryManager.h & 被 Transaction 调用以记录和提交日志；本轮不展开恢复算法。\\
+    tx/concurrency/ConcurrencyManager.h & 被 Transaction 调用以申请读写锁；5B 说明基础锁行为。\\
+    tx/recovery/RecoveryManager.h & 被 Transaction 调用以记录和提交日志；5C 说明基础回滚行为。\\
     \bottomrule
   \end{tabularx}
 \end{table}
 
 从阅读顺序看，可以先阅读 \codepath{Transaction.h}，了解事务暴露给上层的接口；再看 \codepath{Transaction.c} 中这些接口如何转发到 \codepath{BufferList}、\codepath{BufferManager}、\codepath{ConCurrencyManager} 和 \codepath{RecoveryManager}；最后再回到第4章的缓冲区管理内容，理解提交时为什么要释放和写回 Buffer。
 
-\section{Transaction 在系统中的位置}
+\section{实验阶段概览}
+\label{sec:tx-stage-overview}
+
+本章按照 5A、5B、5C 三个并列阶段组织：5A 关注事务对象与 BufferList、BufferManager 的基础协作；5B 关注并发锁的基础语义和释放流程；5C 关注基于旧值日志的最小回滚路径。每个阶段都对应一个真实 CTest，用于支撑本章的观察和代码讲解。
+
+\section{5A 事务基础实验}
+\label{sec:tx-basic}
+
+\subsection{Transaction 在系统中的位置}
 \label{sec:tx-position}
 
-图 \ref{fig:tx-position} 展示了当前事务对象与周边模块的关系。事务层向上承接记录、扫描和更新执行，向下连接缓冲区、文件和日志。并发控制和恢复管理是事务对象内部的重要协作者，但本轮测试只验证基础读写与提交路径。
+图 \ref{fig:tx-position} 展示了当前事务对象与周边模块的关系。事务层向上承接记录、扫描和更新执行，向下连接缓冲区、文件和日志。并发控制和恢复管理是事务对象内部的重要协作者，本章通过三个配套测试分别验证基础读写提交、基础锁管理和基础回滚路径。
 
 \begin{figure}[htbp]
   \centering
@@ -74,9 +82,9 @@
   \label{fig:tx-position}
 \end{figure}
 
-这张图中的虚线表示恢复管理在提交时会要求缓冲区刷出某个事务修改过的页。由于本轮测试使用 \codepath{TransactionSetInt(..., false)}，它不生成数据修改日志，只验证事务提交后 Buffer 能写回文件；日志语义将在恢复实验中再单独观察。
+这张图中的虚线表示恢复管理在提交时会要求缓冲区刷出某个事务修改过的页。事务基础测试使用 \codepath{TransactionSetInt(..., false)}，它不生成数据修改日志，只验证事务提交后 Buffer 能写回文件；旧值日志和回滚语义在 5C 中单独观察。
 
-\section{BufferList 的作用}
+\subsection{BufferList 的作用}
 \label{sec:tx-buffer-list}
 
 \codepath{BufferList} 是事务层和缓冲区层之间的一层薄封装。它做两件事：第一，把当前事务 pin 过的 \codepath{BlockID} 映射到对应 \codepath{Buffer}；第二，维护一个 pin 列表，方便事务提交或回滚时一次性释放该事务固定过的所有 Buffer。
@@ -86,57 +94,87 @@
 \begin{figure}[htbp]
   \centering
   \resizebox{0.86\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=9mm and 14mm]
-    \node[dbnode] (tx) {Transaction};
-    \node[dbnode, right=of tx] (pin) {BufferList\\pin linked list};
-    \node[dbnode, below=of pin] (map) {map\\BlockID string -> Buffer};
-    \node[dbsubnode, right=of pin] (b1) {BlockID\\tx\_basic.tbl, 1};
-    \node[dbsubnode, right=of map] (buf) {Buffer\\page + pins};
-    \node[dbsubnode, below=of buf] (page) {Page\\offset 32 -> int};
+  \begin{tikzpicture}[
+    node distance=10mm and 18mm,
+    every node/.style={align=center},
+    main/.style={dbnode, minimum width=36mm, minimum height=10mm},
+    sub/.style={dbsubnode, minimum width=36mm, minimum height=9mm}
+  ]
+    % 第一层
+    \node[main] (tx) {Transaction};
+    \node[main, right=28mm of tx] (bl) {BufferList\\pin linked list};
 
-    \draw[dbarrow] (tx) -- node[above,font=\footnotesize] {TransactionPin} (pin);
-    \draw[dbdown] (pin) -- (map);
-    \draw[dbarrow] (pin) -- (b1);
-    \draw[dbarrow] (map) -- (buf);
+    % 第二层
+    \node[sub, below left=13mm and 6mm of bl] (block) {BlockID\\tx\_basic.tbl, 1};
+    \node[main, below right=13mm and 6mm of bl] (map) {map\\BlockID string $\rightarrow$ Buffer};
+
+    % 第三层
+    \node[sub, below=11mm of map] (buf) {Buffer\\page + pins};
+    \node[sub, below=11mm of buf] (page) {Page\\offset 32 $\rightarrow$ int};
+
+    % 连线
+    \draw[dbarrow] (tx) -- node[above, font=\footnotesize, fill=white, inner sep=1pt] {TransactionPin} (bl);
+
+    \draw[dbarrow] (bl) -- node[left, font=\footnotesize, fill=white, inner sep=1pt] {记录块号} (block);
+    \draw[dbarrow] (bl) -- node[right, font=\footnotesize, fill=white, inner sep=1pt] {维护映射} (map);
+
+    \draw[dbdown] (map) -- (buf);
     \draw[dbdown] (buf) -- (page);
   \end{tikzpicture}}
   \caption{BufferList 维护事务使用过的 BlockID 和 Buffer}
   \label{fig:tx-buffer-list}
 \end{figure}
 
-\section{事务基础读写与提交流程}
+\subsection{事务基础读写与提交流程}
 \label{sec:tx-basic-flow}
 
-本轮实验只观察一条最小事务链路：初始化事务，pin 一个文件块，在该块对应的 Page 中写入整数，提交事务，再通过 \codepath{FileManagerRead} 从文件中读回验证结果。图 \ref{fig:tx-basic-flow} 给出了这个调用链。
-
+5A 只观察一条最小事务链路：初始化事务，pin 一个文件块，在该块对应的 Page 中写入整数，提交事务，再通过 \codepath{FileManagerRead} 从文件中读回验证结果。图 \ref{fig:tx-basic-flow} 给出了这个调用链。
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.95\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=8mm and 11mm]
-    \node[dbnode] (init) {TransactionInit};
-    \node[dbnode, right=of init] (pin) {TransactionPin};
-    \node[dbnode, right=of pin] (set) {TransactionSetInt};
-    \node[dbnode, below=of set] (get) {TransactionGetInt};
-    \node[dbnode, left=of get] (commit) {TransactionCommit};
-    \node[dbnode, left=of commit] (read) {FileManagerRead 验证};
-    \node[dbsubnode, below=of pin] (buffer) {BufferList / BufferManager};
-    \node[dbsubnode, below=of commit] (flush) {RecoveryCommit\\BufferManagerFlushAll};
+  \resizebox{0.62\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=10mm and 16mm,
+    every node/.style={align=center},
+    main/.style={dbnode, minimum width=40mm, minimum height=10mm},
+    sub/.style={dbsubnode, minimum width=42mm, minimum height=9mm}
+  ]
+    % 主流程（竖向）
+    \node[main] (init) {TransactionInit};
+    \node[main, below=of init] (pin) {TransactionPin};
+    \node[main, below=of pin] (set) {TransactionSetInt};
+    \node[main, below=of set] (commit) {TransactionCommit};
+    \node[main, below=of commit] (read) {FileManagerRead\\持久化验证};
 
-    \draw[dbarrow] (init) -- (pin);
-    \draw[dbarrow] (pin) -- (set);
-    \draw[dbdown] (pin) -- (buffer);
-    \draw[dbarrow] (set) -- (get);
-    \draw[dbarrow] (get) -- (commit);
-    \draw[dbdown] (commit) -- (flush);
-    \draw[dbarrow] (commit) -- (read);
+    % 右侧支撑对象
+    \node[sub, right=20mm of pin] (buffer) {BufferList / BufferManager\\定位并固定 Buffer};
+    \node[sub, right=20mm of set] (page) {Page\\offset 32 $\rightarrow$ int};
+    \node[sub, right=20mm of commit] (flush) {RecoveryCommit\\BufferManagerFlushAll};
+
+    % 主流程线
+    \draw[dbdown] (init) -- (pin);
+    \draw[dbdown] (pin) -- (set);
+    \draw[dbdown] (set) -- (commit);
+    \draw[dbdown] (commit) -- (read);
+
+    % 支撑关系
+    \draw[dbarrow] (pin) -- (buffer);
+    \draw[dbarrow] (set) -- (page);
+    \draw[dbarrow] (commit) -- (flush);
+
+    % 读操作旁支
+    \draw[dbarrow]
+      (buffer.south east) to[bend right=12]
+      node[midway, right, font=\footnotesize, fill=white, inner sep=1pt] {TransactionGetInt}
+      (page.north east);
+
   \end{tikzpicture}}
   \caption{Transaction 基础读写与提交调用链}
   \label{fig:tx-basic-flow}
 \end{figure}
 
-这条链路刻意避开了回滚恢复断言，因为回滚需要结合 \codepath{RecoveryManager} 的日志记录和旧值恢复语义来设计测试。为了保持章节边界清晰，本轮只确认事务与 BufferList、BufferManager 的基础协作。
+这条链路刻意避开了回滚恢复断言，因为回滚需要结合 \codepath{RecoveryManager} 的日志记录和旧值恢复语义来设计测试。为了保持章节边界清晰，5A 只确认事务与 BufferList、BufferManager 的基础协作，5C 再验证回滚路径。
 
-\section{配套测试}
+\subsection{5A 配套测试}
 \label{sec:tx-test}
 
 本章新增并注册了配套测试文件：
@@ -173,7 +211,7 @@ ctest --test-dir build --output-on-failure -R Transaction
 ctest --test-dir build --output-on-failure
 \end{dbcode}
 
-\section{关键代码讲解}
+\subsection{5A 关键代码讲解}
 \label{sec:tx-code}
 
 第一段代码来自 \codepath{tx/Transaction.c} 的 \apiname{TransactionInit}。事务初始化时会保存文件管理器和缓冲区管理器，并创建恢复管理器、并发管理器和 BufferList。
@@ -261,21 +299,54 @@ void TransactionCommit(Transaction*transaction){
 
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.9\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=9mm and 14mm]
-    \node[dblevel] (tx) {Transaction};
-    \node[dbnode, right=of tx] (cm) {ConCurrencyManager\\当前事务持锁记录};
-    \node[dbnode, right=of cm] (lt) {LockTable\\全局 BlockID 锁状态};
-    \node[dbsubnode, below=of cm] (local) {map\_str\_t\\BlockID string -> S/X};
-    \node[dbsubnode, below=of lt] (global) {map\_int\_t\\BlockID string -> count/-1};
-    \node[dbsubnode, below=of tx] (block) {BlockID\\file name + block number};
+  \resizebox{0.82\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=11mm and 20mm,
+    every node/.style={align=center},
+    main/.style={dblevel, minimum width=38mm, minimum height=10mm},
+    mid/.style={dbnode, minimum width=40mm, minimum height=10mm},
+    sub/.style={dbsubnode, minimum width=40mm, minimum height=9mm}
+  ]
+    % 顶层
+    \node[main] (tx) {Transaction};
 
-    \draw[dbarrow] (tx) -- node[above,font=\footnotesize] {SLock / XLock} (cm);
-    \draw[dbarrow] (cm) -- node[above,font=\footnotesize] {LockTableSLock / XLock} (lt);
-    \draw[dbdown] (cm) -- (local);
-    \draw[dbdown] (lt) -- (global);
-    \draw[dbarrow] (block) -- (cm);
-    \draw[dbarrow] (block) -- (lt);
+    % 事务侧并发管理器
+    \node[main, below=of tx] (cm) {ConCurrencyManager\\当前事务持锁记录};
+
+    % BlockID 与字符串键
+    \node[sub, below left=13mm and 24mm of cm] (block) {BlockID\\file name + block number};
+    \node[mid, below=14mm of cm] (key) {BlockID2CString\\生成 BlockID string};
+
+    % 本地记录与全局锁表
+    \node[sub, below left=14mm and 20mm of key] (local) {map\_str\_t\\BlockID string $\rightarrow$ S/X};
+    \node[mid, below right=14mm and 20mm of key] (lt) {LockTable\\全局 BlockID 锁状态};
+    \node[sub, below=of lt] (global) {map\_int\_t\\BlockID string $\rightarrow$ count / -1};
+
+    % 连线
+    \draw[dbarrow] (tx) --
+      node[midway, right, font=\footnotesize, fill=white, inner sep=1pt] {SLock / XLock}
+      (cm);
+
+    \draw[dbarrow] (cm) --
+      node[midway, right, font=\footnotesize, fill=white, inner sep=1pt] {转换锁键}
+      (key);
+
+    \draw[dbarrow] (block) --
+      node[midway, above left, font=\footnotesize, fill=white, inner sep=1pt] {作为锁对象}
+      (key);
+
+    \draw[dbarrow] (key) --
+      node[midway, above left, font=\footnotesize, fill=white, inner sep=1pt] {记录本地锁}
+      (local);
+
+    \draw[dbarrow] (key) --
+      node[midway, above right, font=\footnotesize, fill=white, inner sep=1pt] {访问全局锁表}
+      (lt);
+
+    \draw[dbdown] (lt) --
+      node[midway, right, font=\footnotesize, fill=white, inner sep=1pt] {更新锁状态}
+      (global);
+
   \end{tikzpicture}}
   \caption{Transaction、ConCurrencyManager、LockTable 与 BlockID 的关系}
   \label{fig:tx-concurrency-objects}
@@ -292,48 +363,68 @@ void TransactionCommit(Transaction*transaction){
     已有锁 & 新申请 S 锁 & 新申请 X 锁 \\
     \midrule
     无锁 & 可以获取，共享计数增加 & 可以获取，锁表值变为 -1 \\
-    S 锁 & 理论上可共享；本轮不测试多事务共享计数 & 需要等待其他 S 锁释放；本轮不测试阻塞升级 \\
-    X 锁 & 需要等待 X 锁释放；本轮不测试阻塞等待 & 同一管理器重复获取会直接返回 \\
+    S 锁 & 理论上可共享；本章不测试多事务共享计数 & 需要等待其他 S 锁释放；本章不测试阻塞升级 \\
+    X 锁 & 需要等待 X 锁释放；本章不测试阻塞等待 & 同一管理器重复获取会直接返回 \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
 读写操作进入并发控制的调用链如图 \ref{fig:tx-lock-call-chain} 所示。读路径调用共享锁，写路径调用排他锁，最终都以 \codepath{BlockID} 的字符串形式作为锁表键。
-
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.92\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=8mm and 12mm]
-    \node[dbnode] (get) {TransactionGetInt/String};
-    \node[dbnode, right=of get] (slock) {ConCurrencyManagerSLock};
-    \node[dbnode, right=of slock] (lts) {LockTableSLock};
-    \node[dbnode, below=of get] (set) {TransactionSetInt/String};
-    \node[dbnode, right=of set] (xlock) {ConCurrencyManagerXLock};
-    \node[dbnode, right=of xlock] (ltx) {LockTableXLock};
-    \node[dbsubnode, right=of lts] (key1) {BlockID2CString};
-    \node[dbsubnode, right=of ltx] (key2) {BlockID2CString};
+  \resizebox{0.9\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=9mm and 14mm,
+    every node/.style={align=center},
+    main/.style={dbnode, minimum width=34mm, minimum height=10mm},
+    tag/.style={dblevel, minimum width=20mm, minimum height=9mm},
+    note/.style={dbsubnode, minimum width=54mm, minimum height=9mm}
+  ]
 
+    % ===== 读路径 =====
+    \node[tag] (readtag) {读操作\\S 锁};
+    \node[main, right=of readtag] (get) {TransactionGetInt\\TransactionGetString};
+    \node[main, right=of get] (slock) {ConCurrencyManager\\SLock};
+    \node[main, right=of slock] (lts) {LockTableSLock};
+
+    % ===== 写路径 =====
+    \node[tag, below=20mm of readtag] (writetag) {写操作\\X 锁};
+    \node[main, right=of writetag] (set) {TransactionSetInt\\TransactionSetString};
+    \node[main, right=of set] (xlock) {ConCurrencyManager\\XLock};
+    \node[main, right=of xlock] (ltx) {LockTableXLock};
+
+    % ===== 底部共享说明 =====
+    \node[note, below=5mm of slock, xshift=20mm] (keynote)
+      {内部会将同一 BlockID\\转为字符串键后访问锁表};
+
+    % ===== 连线：读路径 =====
+    \draw[dbarrow] (readtag) -- (get);
     \draw[dbarrow] (get) -- (slock);
     \draw[dbarrow] (slock) -- (lts);
-    \draw[dbarrow] (lts) -- (key1);
+
+    % ===== 连线：写路径 =====
+    \draw[dbarrow] (writetag) -- (set);
     \draw[dbarrow] (set) -- (xlock);
     \draw[dbarrow] (xlock) -- (ltx);
-    \draw[dbarrow] (ltx) -- (key2);
+
+    % ===== 虚线说明 =====
+    \draw[dbdashline] (lts) -- (keynote);
+    \draw[dbdashline] (ltx) -- (keynote);
+
   \end{tikzpicture}}
   \caption{读写操作获取 S 锁和 X 锁的调用链}
   \label{fig:tx-lock-call-chain}
 \end{figure}
-
 锁释放由 \apiname{ConCurrencyManagerRelease} 统一完成。它遍历当前事务管理器的本地锁记录，对每个键调用 \apiname{LockTableUnLock}，再从本地 map 中删除该键。图 \ref{fig:tx-lock-release} 展示了这个过程。
 
 \begin{figure}[htbp]
   \centering
   \resizebox{0.86\textwidth}{!}{%
   \begin{tikzpicture}[node distance=8mm and 12mm]
-    \node[dbnode] (release) {ConCurrencyManagerRelease};
+    \node[dbnode] (release) {ConCurrencyManager\\Release};
     \node[dbnode, right=of release] (iter) {遍历 mapStr};
-    \node[dbnode, right=of iter] (unlock) {LockTableUnLock};
-    \node[dbnode, below=of iter] (remove) {map\_remove 本地锁记录};
+    \node[dbnode, right=of iter] (unlock) {LockTable\\UnLock};
+    \node[dbnode, below=of iter] (remove) {map\_remove\\本地锁记录};
     \node[dbsubnode, right=of unlock] (global) {全局 LockTable 状态清除};
 
     \draw[dbarrow] (release) -- (iter);
@@ -345,7 +436,7 @@ void TransactionCommit(Transaction*transaction){
   \label{fig:tx-lock-release}
 \end{figure}
 
-本轮新增的并发基础测试文件为：
+并发基础测试文件为：
 \begin{itemize}
   \item \codepath{test/tx/ConcurrencyBasicTest.c}
 \end{itemize}
@@ -372,7 +463,7 @@ void TransactionCommit(Transaction*transaction){
 ctest --test-dir build --output-on-failure -R Concurrency
 \end{dbcode}
 
-本轮没有测试复杂阻塞场景，原因有三点：第一，当前 \codepath{LockTableSLock} 和 \codepath{LockTableXLock} 在冲突时采用等待循环，并通过时间判断退出，测试会变慢且不稳定；第二，本章目标是锁基础状态，不是多事务调度压力测试；第三，\codepath{DeadlockDetector} 的等待图和环检测属于后续独立实验，不能在没有专门测试设计的情况下混入本轮。
+本章没有测试复杂阻塞场景，原因有三点：第一，当前 \codepath{LockTableSLock} 和 \codepath{LockTableXLock} 在冲突时采用等待循环，并通过时间判断退出，测试会变慢且不稳定；第二，本章目标是锁基础状态，不是多事务调度压力测试；第三，\codepath{DeadlockDetector} 的等待图和环检测适合作为更深入的独立实验，不能在没有专门测试设计的情况下混入本章基础实验。
 
 \section{5C 恢复与回滚基础实验}
 \label{sec:tx-recovery-basic}
@@ -404,25 +495,39 @@ ctest --test-dir build --output-on-failure -R Concurrency
 \end{figure}
 
 为什么要在修改前记录旧值？因为 rollback 的核心不是“撤销函数调用”，而是把数据页恢复成修改之前的内容。以整数写入为例，\apiname{RecoverySetInt} 会先从当前 \codepath{Buffer->page} 读出旧值，再调用 \apiname{SetIntRecordWriteToLog} 把事务号、文件块、偏移量和旧值写入日志。图 \ref{fig:tx-setint-log} 展示了这个记录过程。
-
 \begin{figure}[htbp]
   \centering
   \resizebox{0.92\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=8mm and 11mm]
-    \node[dbnode] (set) {TransactionSetInt\\new value};
-    \node[dbnode, right=of set] (recset) {RecoverySetInt};
-    \node[dbnode, right=of recset] (old) {PageGetInt\\read old value};
-    \node[dbnode, below=of recset] (log) {SetIntRecordWriteToLog};
-    \node[dbsubnode, right=of log] (fields) {txNum, BlockID, offset, oldVal};
-    \node[dbnode, below=of set] (write) {PageSetInt\\write new value};
-    \node[dbnode, right=of write] (mark) {BufferSetModified\\txNum + lsn};
+  \begin{tikzpicture}[
+    node distance=10mm and 18mm,
+    every node/.style={align=center},
+    main/.style={dbnode, minimum width=36mm, minimum height=10mm},
+    sub/.style={dbsubnode, minimum width=38mm, minimum height=9mm}
+  ]
 
+    % 起点
+    \node[main] (set) {TransactionSetInt\\new value};
+
+    % 上层：记录旧值日志
+    \node[main, right=of set] (recset) {RecoverySetInt};
+    \node[main, right=of recset] (old) {PageGetInt\\read old value};
+    \node[main, below=12mm of recset] (log) {SetIntRecordWriteToLog};
+    \node[sub, right=of log] (fields) {txNum, BlockID,\\offset, oldVal};
+
+    % 下层：真正写入新值
+    \node[main, below=12mm of set] (write) {PageSetInt\\write new value};
+    \node[main, right=of write] (mark) {BufferSetModified\\txNum + lsn};
+
+    % 连线
     \draw[dbarrow] (set) -- (recset);
-    \draw[dbarrow] (recset) -- (old);
-    \draw[dbdown] (recset) -- (log);
+    \draw[dbarrow] (recset) -- node[midway, above=2pt, font=\footnotesize, fill=white, inner sep=1pt] {先读旧值} (old);
+
+    \draw[dbdown] (recset) -- node[midway, right=2pt, font=\footnotesize, fill=white, inner sep=1pt] {写日志} (log);
     \draw[dbarrow] (log) -- (fields);
-    \draw[dbdown] (set) -- (write);
+
+    \draw[dbdown] (set) -- node[midway, left=2pt, font=\footnotesize, fill=white, inner sep=1pt] {再写新值} (write);
     \draw[dbarrow] (write) -- (mark);
+
   \end{tikzpicture}}
   \caption{SETINT 修改前记录旧值日志的过程}
   \label{fig:tx-setint-log}
@@ -465,12 +570,12 @@ rollback 时，\apiname{RecoveryDoRollback} 会通过日志迭代器从后向前
     \midrule
     commit & flush 当前事务修改过的 Buffer，写入 COMMIT 日志，释放锁和 Buffer。 & TransactionBasicTest 验证提交后 int 能从文件读回。\\
     rollback & 倒序扫描日志，对 SETINT/SETSTRING 调用 undo，写入 ROLLBACK 日志，释放锁和 Buffer。 & RecoveryBasicTest 验证 SETINT 旧值能恢复。\\
-    crash recovery & 扫描日志，跳过已提交或已回滚事务，对未完成事务执行 undo。 & 本章不测试，留作后续扩展。\\
+    crash recovery & 扫描日志，跳过已提交或已回滚事务，对未完成事务执行 undo。 & 本章只说明边界，可继续扩展为独立实验。\\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-本轮新增的恢复基础测试文件为：
+恢复基础测试文件为：
 \begin{itemize}
   \item \codepath{test/tx/RecoveryBasicTest.c}
 \end{itemize}
@@ -483,7 +588,7 @@ rollback 时，\apiname{RecoveryDoRollback} 会通过日志迭代器从后向前
 ctest --test-dir build --output-on-failure -R Recovery
 \end{dbcode}
 
-本轮没有测试字符串回滚、多事务交错和崩溃恢复。字符串日志路径在当前实现中涉及字符串生命周期和记录长度细节，适合单独补测试；多事务交错会同时牵涉锁、日志顺序和缓冲区替换；崩溃恢复需要重新打开数据库环境并验证未完成事务的 undo 结果，应作为后续更完整的恢复实验推进。
+本章没有测试字符串回滚、多事务交错和崩溃恢复。字符串日志路径在当前实现中涉及字符串生命周期和记录长度细节，适合单独设计验证；多事务交错会同时牵涉锁、日志顺序和缓冲区替换；崩溃恢复需要重新打开数据库环境并验证未完成事务的 undo 结果，适合作为更完整的恢复实验继续扩展。
 
 \section{运行与观察}
 \label{sec:tx-run-observe}
@@ -499,25 +604,25 @@ ctest --test-dir build --output-on-failure -R Recovery
   \item 观察 \codepath{TransactionSetInt} 写入后，提交是否能让 \codepath{FileManagerRead} 从文件块中读回相同整数。
   \item 观察 \codepath{LockTable} 中 S 锁、X 锁的数值表示，以及 \codepath{ConCurrencyManagerRelease} 如何清空本地锁记录。
   \item 观察 \codepath{TransactionRollback} 是否能借助 SETINT 旧值日志恢复修改前的整数。
-  \item 注意本章当前没有断言 DeadlockDetector 和崩溃恢复，这些内容必须等对应测试补齐后再写入实验正文。
+  \item 注意本章没有断言 DeadlockDetector 和崩溃恢复，这些内容适合作为更深入实验单独设计验证。
 \end{enumerate}
 
-\section{后续小节 TODO}
-\label{sec:tx-future}
+\section{本章小结}
+\label{sec:tx-summary}
 
-表 \ref{tab:tx-future-plan} 记录第5章后续实验边界。当前只完成 5A 事务基础，后续内容仍按“先补 CTest，再写章节”的规则推进。
+表 \ref{tab:tx-stage-summary} 汇总第5章三个阶段的实验边界。5A、5B、5C 均已有配套测试，本章不把死锁检测、字符串回滚、多事务交错和崩溃恢复混入基础实验。
 
 \begin{table}[htbp]
   \centering
-  \caption{第5章后续实验安排}
-  \label{tab:tx-future-plan}
+  \caption{第5章实验阶段汇总}
+  \label{tab:tx-stage-summary}
   \begin{tabularx}{\textwidth}{l Y Y}
     \toprule
-    阶段 & 内容 & 当前状态 \\
+    阶段 & 内容 & 验证方式 \\
     \midrule
-    5A & Transaction、BufferList、BufferManager 的基础协作 & 已新增 TransactionBasicTest 并通过。\\
-    5B & LockTable 与 ConCurrencyManager 基础加锁释放实验 & 已新增 ConcurrencyBasicTest 并通过；DeadlockDetector 暂不展开。\\
-    5C & RecoveryManager、LogRecord 与整数旧值回滚实验 & 已新增 RecoveryBasicTest 并通过；崩溃恢复暂不展开。\\
+    5A & Transaction、BufferList、BufferManager 的基础协作 & TransactionBasicTest 验证提交后写回。\\
+    5B & LockTable 与 ConCurrencyManager 基础加锁释放实验 & ConcurrencyBasicTest 验证 S/X 锁和 release all。\\
+    5C & RecoveryManager、LogRecord 与整数旧值回滚实验 & RecoveryBasicTest 验证 SETINT 旧值回滚。\\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -528,6 +633,6 @@ ctest --test-dir build --output-on-failure -R Recovery
 \begin{enumerate}
   \item 为什么事务层不直接读写文件，而是通过 BufferManager 和 BufferList 间接访问 Page？
   \item Transaction 为什么需要同时持有 ConcurrencyManager 和 RecoveryManager？
-  \item 如果事务提交时没有释放已经 pin 的 Buffer，后续模块可能遇到什么问题？
+  \item 如果事务提交时没有释放已经 pin 的 Buffer，其他模块可能遇到什么问题？
   \item 为什么回滚测试不能只检查 TransactionRollback 是否被调用，而要结合日志和旧值恢复结果来验证？
 \end{enumerate}

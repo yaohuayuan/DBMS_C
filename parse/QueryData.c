@@ -3,7 +3,7 @@
 //
 
 #include "QueryData.h"
-QueryData *QueryDataInit(List*fields,List*tables,Predicate *predicate){
+QueryData *QueryDataInit(CList*fields,CList*tables,Predicate *predicate){
     QueryData *queryData = malloc(sizeof (QueryData));
     queryData->predicate = predicate;
     queryData->fields = fields;
@@ -14,7 +14,7 @@ QueryData *QueryDataInit(List*fields,List*tables,Predicate *predicate){
 #include <stdlib.h>
 #include <string.h>
 char* QueryDataToString(QueryData *qd) {
-    if (!qd) return strdup("");  // 如果 QueryData 为空，直接返回空字符串
+    if (!qd) return strdup(""); // 如果 QueryData 为空，直接返回空字符串
 
     // 预估最大缓冲区大小（根据字段和表名的个数来估算，假设每个字段/表名平均长度为 100）
     size_t buffer_size = 1024;
@@ -24,17 +24,17 @@ char* QueryDataToString(QueryData *qd) {
     // 初始化结果字符串
     strcpy(result, "select ");
 
-    // 拼接字段名
-    ListNode *fieldNode = qd->fields->head;
+ // 拼接字段名
+    CListNode *fieldNode = qd->fields->head;
     size_t offset = strlen(result);
     while (fieldNode) {
-        CString *fieldNameCStr = fieldNode->value.stringData;
-        char *fieldName = CStringGetPtr(fieldNameCStr);
+        CString *fieldNameCStr = ((CString *)fieldNode->data);
+        const char *fieldName = CStringGetPtr(fieldNameCStr);
         size_t len = strlen(fieldName);
 
         // 确保缓冲区足够大
         if (offset + len + 2 > buffer_size) {
-            buffer_size *= 2;  // 扩展缓冲区
+            buffer_size *= 2; // 扩展缓冲区
             result = (char *)realloc(result, buffer_size);
             if (!result) return NULL;  // 内存分配失败处理
         }
@@ -42,26 +42,26 @@ char* QueryDataToString(QueryData *qd) {
         // 拼接字段名
         strcat(result, fieldName);
         strcat(result, ", ");
-        offset = strlen(result);  // 更新偏移量
+        offset = strlen(result); // 更新偏移量
         fieldNode = fieldNode->next;
     }
     if (qd->fields->size > 0) {
-        result[strlen(result) - 2] = '\0';  // 移除最后的逗号和空格
+        result[strlen(result) - 2] = '\0'; // 移除最后的逗号和空格
     }
 
     // 拼接表名
     strcat(result, " from ");
     offset = strlen(result);
 
-    ListNode *tableNode = qd->tables->head;
+    CListNode *tableNode = qd->tables->head;
     while (tableNode) {
-        CString *tableNameCStr = tableNode->value.stringData;
-        char *tableName = CStringGetPtr(tableNameCStr);
+        CString *tableNameCStr = ((CString *)tableNode->data);
+        const char *tableName = CStringGetPtr(tableNameCStr);
         size_t len = strlen(tableName);
 
         // 确保缓冲区足够大
         if (offset + len + 2 > buffer_size) {
-            buffer_size *= 2;  // 扩展缓冲区
+            buffer_size *= 2; // 扩展缓冲区
             result = (char *)realloc(result, buffer_size);
             if (!result) return NULL;  // 内存分配失败处理
         }
@@ -69,11 +69,11 @@ char* QueryDataToString(QueryData *qd) {
         // 拼接表名
         strcat(result, tableName);
         strcat(result, ", ");
-        offset = strlen(result);  // 更新偏移量
+        offset = strlen(result); // 更新偏移量
         tableNode = tableNode->next;
     }
     if (qd->tables->size > 0) {
-        result[strlen(result) - 2] = '\0';  // 移除最后的逗号和空格
+        result[strlen(result) - 2] = '\0'; // 移除最后的逗号和空格
     }
 
     // 拼接谓词
@@ -83,7 +83,7 @@ char* QueryDataToString(QueryData *qd) {
             // 确保缓冲区足够大
             size_t len = strlen(predString);
             if (offset + strlen(" where ") + len + 1 > buffer_size) {
-                buffer_size *= 2;  // 扩展缓冲区
+                buffer_size *= 2; // 扩展缓冲区
                 result = (char *)realloc(result, buffer_size);
                 if (!result) return NULL;  // 内存分配失败处理
             }

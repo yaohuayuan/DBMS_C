@@ -1,46 +1,59 @@
-//
-// Created by yaohuayuan on 2025/5/31.
-//
-
 #include "ByteBuffer.h"
-#define CHECK_BUFFER(b) do { if (!(b)) return BYTEBUFFER_ERROR_NULL; } while (0)
-#define CHECK_BOUNDS(b, s) do { \
-    if ((b)->position + (s) > (b)->limit) return BYTEBUFFER_ERROR_BOUNDS; \
-} while (0)
+
 ByteBuffer* bufferAllocate(uint64_t size){
-    if(size<=0)
+    if(size==0)
         return NULL;
     ByteBuffer *buffer = malloc(sizeof(ByteBuffer));
     if(buffer == NULL)
         return NULL;
     buffer->size = size;
     buffer->data = malloc(sizeof(uint8_t)*size);
-    if(buffer->data == NULL)
+    if(buffer->data == NULL){
+        free(buffer);
         return NULL;
+    }
     bufferClear(buffer);
     return buffer;
 }
 ByteBuffer *bufferInitByteSize(uint64_t size,uint8_t*data){
-    if(size<=0)
+    if(size==0 || data == NULL)
         return NULL;
     ByteBuffer *buffer = malloc(sizeof(ByteBuffer));
     if(buffer == NULL)
         return NULL;
     buffer->size = size;
     buffer->data = malloc(sizeof(uint8_t)*size);
-    if(buffer->data == NULL)
+    if(buffer->data == NULL){
+        free(buffer);
         return NULL;
+    }
     bufferClear(buffer);
     memcpy(buffer->data,data,size);
     return buffer;
 }
-void bufferClear(ByteBuffer* buffer){    if (!buffer) return;    memset(buffer->data,0,buffer->size);    buffer->position = 0;    buffer->limit = buffer->size;}
+void bufferClear(ByteBuffer* buffer) {
+    if (!buffer || !buffer->data) return;
+    memset(buffer->data, 0, buffer->size);
+    buffer->position = 0;
+    buffer->limit = buffer->size;
+}
 void bufferFree(ByteBuffer* buffer){
+    if (!buffer) return;
     free(buffer->data);
     free(buffer);
 }
-void bufferCompact(ByteBuffer* buffer){    if (!buffer) return;    uint64_t numberOfBytes = buffer->limit - buffer->position;    memmove(buffer->data,&(buffer->data[buffer->position]),numberOfBytes);    buffer->limit = buffer->size;    buffer->position = numberOfBytes;}
-void bufferFlip(ByteBuffer* buffer){    if (!buffer) return;    buffer->limit = buffer->position;    buffer->position = 0;}
+void bufferCompact(ByteBuffer* buffer) {
+    if (!buffer || !buffer->data || buffer->position > buffer->limit) return;
+    uint64_t numberOfBytes = buffer->limit - buffer->position;
+    memmove(buffer->data, &(buffer->data[buffer->position]), numberOfBytes);
+    buffer->limit = buffer->size;
+    buffer->position = numberOfBytes;
+}
+void bufferFlip(ByteBuffer* buffer) {
+    if (!buffer) return;
+    buffer->limit = buffer->position;
+    buffer->position = 0;
+}
 ByteBufferError bufferPut(ByteBuffer* buffer, uint8_t data){
     if (!buffer || !buffer->data) return BYTEBUFFER_ERROR_NULL;
     if (buffer->position + 1 > buffer->limit) return BYTEBUFFER_ERROR_BOUNDS;
@@ -118,9 +131,10 @@ ByteBufferError bufferGetLong(ByteBuffer* buffer, uint64_t *data){
 }
 ByteBufferError bufferGetBytes(ByteBuffer* buffer, uint8_t *data, int size){
     if (!buffer || !buffer->data || !data) return BYTEBUFFER_ERROR_NULL;
-    if (buffer->position + size > buffer->limit) return BYTEBUFFER_ERROR_BOUNDS;
-    memmove(data, buffer->data + buffer->position, size);
-    buffer->position += size;
+    if (size < 0) return BYTEBUFFER_ERROR_BOUNDS;
+    if (buffer->position + (uint64_t)size > buffer->limit) return BYTEBUFFER_ERROR_BOUNDS;
+    memmove(data, buffer->data + buffer->position, (uint64_t)size);
+    buffer->position += (uint64_t)size;
     return BYTEBUFFER_OK;
 }
 ByteBufferError bufferPutPosition(ByteBuffer* buffer, uint64_t position,uint8_t data){
@@ -176,8 +190,7 @@ uint64_t bufferPosition(ByteBuffer* buffer, uint64_t newPosition) {
     buffer->position = newPosition;
     return newPosition;
 }
-ByteBufferError bufferPutBytesPosition(ByteBuffer* buffer, uint64_t position, uint8_t* data, uint64_t size) {
-    // 检查缓冲区是否有效以及写入是否越界
+ByteBufferError bufferPutBytesPosition(ByteBuffer* buffer, uint64_t position, const uint8_t* data, uint64_t size) {
     if (!buffer || !buffer->data || !data) return BYTEBUFFER_ERROR_NULL;
     if (position + size > buffer->limit){
         return BYTEBUFFER_ERROR_BOUNDS;
@@ -186,7 +199,7 @@ ByteBufferError bufferPutBytesPosition(ByteBuffer* buffer, uint64_t position, ui
     memcpy(buffer->data + position, data, size);
     return BYTEBUFFER_OK;
 }
-ByteBufferError bufferPutBytes(ByteBuffer* buffer, uint8_t* data,uint64_t size) {
+ByteBufferError bufferPutBytes(ByteBuffer* buffer, const uint8_t* data,uint64_t size) {
     if (!buffer || !buffer->data || !data) return BYTEBUFFER_ERROR_NULL;
     if (buffer->position + size > buffer->limit) return BYTEBUFFER_ERROR_BOUNDS;
     memcpy(buffer->data + buffer->position, data, size);

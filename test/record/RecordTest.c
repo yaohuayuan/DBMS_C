@@ -199,7 +199,7 @@ static void test_record_page_basic(void **state) {
 
     // 读取记录值
     int retrievedId = RecordPageGetInt(recordPage, slot, idField);
-    char *retrievedNameStr = RecordPageGetString(recordPage, slot, nameField);
+    const char *retrievedNameStr = RecordPageGetString(recordPage, slot, nameField);
     CString *retrievedName = CStringCreateFromCStr(retrievedNameStr);
 
     assert_int_equal(retrievedId, 123);

@@ -25,11 +25,11 @@ typedef enum {
 typedef struct Transaction{
     TransactionStatus code;  ///< 事务状态
     RecoveryManager *recoveryManager;  ///< 恢复管理器
-    ConCurrencyManager *conCurrencyManager;  ///< 并发管理器
-    BufferManager *bufferManager;  ///< 缓冲管理器
-    FileManager *fileManager;  ///< 文件管理器
+    ConCurrencyManager *conCurrencyManager; ///< 并发管理器
+    BufferManager *bufferManager; ///< 缓冲管理器
+    FileManager *fileManager; ///< 文件管理器
     int txNum;  ///< 事务编号
-    BufferList *bufferList;  ///< 缓冲区列表
+    BufferList *bufferList; ///< 缓冲区列表
 }Transaction;
 
 /**

@@ -9,7 +9,7 @@
  * @brief CreateViewData 结构体定义，用于存储创建视图的数据。
  */
 typedef struct CreateViewData{
-    CString * viewName; ///< 视图名称
+    CString *viewName;    ///< 视图名称
     QueryData *queryData; ///< 查询数据，包含视图的定义
 }CreateViewData;
 

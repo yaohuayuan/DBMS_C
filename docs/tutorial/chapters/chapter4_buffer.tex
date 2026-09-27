@@ -13,7 +13,7 @@
 
 \codepath{buffer/} 模块位于文件页式存储层之上、记录管理和事务管理层之下。它的核心职责是把磁盘块装入内存 \codepath{Buffer}，并在块被修改后按需要写回文件。上层模块不必每次访问记录都直接调用 \codepath{FileManagerRead} 或 \codepath{FileManagerWrite}，而是先向 \codepath{BufferManager} 申请 pin 某个 \codepath{BlockID}，再通过返回的 \codepath{Buffer->page} 读写页内数据。
 
-如果一个 \codepath{Buffer} 被 pin，表示当前有人正在使用它，不能被替换；如果 unpin 后 pin 计数归零，它重新变为可用帧。被修改过的 Buffer 会通过 \apiname{BufferSetModified} 记录事务号和可选 LSN，后续 flush 时写回底层文件。
+如果一个 \codepath{Buffer} 被 pin，表示当前有人正在使用它，不能被替换；如果 unpin 后 pin 计数归零，它重新变为可用帧。被修改过的 Buffer 会通过 \apiname{BufferSetModified} 记录事务号和可选 LSN，并在 flush 时写回底层文件。
 
 \section{相关源码文件}
 \label{sec:buffer-source-files}
@@ -57,7 +57,7 @@
     \node[dbnode, below=of bm] (buffer) {Buffer\\page + blockId + pins};
     \node[dbnode, below right=of bm] (fm) {FileManager\\read/write block};
     \node[dbsubnode, below=of buffer] (page) {Page\\页内字节缓冲};
-    \node[dbsubnode, right=of page] (block) {BlockID\\文件名 + 块号};
+    \node[dbsubnode, left=of page] (block) {BlockID\\文件名 + 块号};
     \node[dbsubnode, below=of fm] (lm) {LogManager\\flush LSN};
 
     \draw[dbdown] (bm) -- (policy);
@@ -82,42 +82,68 @@
 
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.86\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=12mm and 20mm]
+  \resizebox{0.82\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=14mm and 24mm,
+    every node/.style={align=center}
+  ]
     \node[dbnode] (free) {未绑定或未 pin\\pins = 0};
     \node[dbnode, right=of free] (pinned) {正在使用\\pins > 0};
     \node[dbnode, below=of pinned] (dirty) {已修改\\txNum >= 0};
     \node[dbnode, left=of dirty] (flushed) {已写回\\txNum = -1};
 
-    \draw[dbarrow] (free) -- node[above,font=\footnotesize] {pin} (pinned);
-    \draw[dbarrow] (pinned) -- node[right,font=\footnotesize] {BufferSetModified} (dirty);
-    \draw[dbarrow] (dirty) -- node[below,font=\footnotesize] {BufferFlush / FlushAll} (flushed);
-    \draw[dbarrow] (pinned) to[bend left=18] node[above,font=\footnotesize] {unpin 到 0} (free);
-    \draw[dbarrow] (flushed) -- node[left,font=\footnotesize] {unpin 或复用} (free);
+    \draw[dbarrow] (free) -- 
+      node[midway, above, font=\footnotesize, fill=white, inner sep=1pt] {pin} 
+      (pinned);
+
+    \draw[dbarrow] (pinned) -- 
+      node[midway, right, font=\footnotesize, fill=white, inner sep=1pt] {BufferSetModified} 
+      (dirty);
+
+    \draw[dbarrow] (dirty) -- 
+      node[midway, below, font=\footnotesize, fill=white, inner sep=1pt] {BufferFlush\\/ FlushAll} 
+      (flushed);
+
+    \draw[dbarrow] (pinned) to[bend left=18] 
+      node[midway, above, font=\footnotesize, fill=white, inner sep=1pt] {unpin 到 0} 
+      (free);
+
+    \draw[dbarrow] (flushed) to[bend left=18] 
+      node[midway, below, font=\footnotesize, fill=white, inner sep=1pt] {unpin 或复用} 
+      (free);
   \end{tikzpicture}}
   \caption{Buffer 状态转换图}
   \label{fig:buffer-state}
 \end{figure}
-
 图 \ref{fig:buffer-pin-chain} 展示了 pin/unpin 的调用链。注意，\apiname{BufferManagerPin} 会在内部循环调用 \apiname{BufferManagerTryToPin}；如果暂时没有可用 Buffer，就等待，超过 \codepath{MAX_TIME} 后返回 \codepath{NULL}。
 
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.92\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=8mm and 11mm]
-    \node[dbnode] (pin) {BufferManagerPin};
-    \node[dbnode, right=of pin] (try) {TryToPin};
-    \node[dbnode, right=of try] (find) {FindExistingBuffer};
-    \node[dbnode, below=of try] (choose) {ChooseUnPinnedBuffer};
-    \node[dbnode, right=of choose] (assign) {BufferAssignToBlock};
-    \node[dbnode, right=of assign] (bufpin) {BufferPin};
-    \node[dbnode, below=of assign] (unpin) {BufferManagerUnpin\\BufferUnPin};
+  \resizebox{0.88\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=10mm and 18mm,
+    every node/.style={align=center}
+  ]
+    \node[dblevel] (pin) {BufferManagerPin};
+    \node[dbnode, below=of pin] (try) {BufferManagerTryToPin};
+
+    \node[dbnode, below left=14mm and 20mm of try] (find) {FindExistingBuffer\\命中已有 Buffer};
+    \node[dbnode, below right=14mm and 20mm of try] (choose) {ChooseUnPinnedBuffer\\选择可用页框};
+
+    \node[dbnode, below=of choose] (assign) {BufferAssignToBlock\\必要时写回旧页并读入新块};
+
+    \node[dbnode, below=50mm of try] (bufpin) {BufferPin\\pins 加 1};
+    \node[dbnode, below=of bufpin] (unpin) {BufferManagerUnpin / BufferUnPin\\pins 减 1};
 
     \draw[dbarrow] (pin) -- (try);
-    \draw[dbarrow] (try) -- (find);
-    \draw[dbdown] (try) -- (choose);
+
+    \draw[dbarrow] (try) -- node[midway, above left, font=\footnotesize, fill=white, inner sep=1pt] {命中} (find);
+    \draw[dbarrow] (try) -- node[midway, above right, font=\footnotesize, fill=white, inner sep=1pt] {未命中} (choose);
+
+    \draw[dbarrow] (find) -- (bufpin);
     \draw[dbarrow] (choose) -- (assign);
     \draw[dbarrow] (assign) -- (bufpin);
+
     \draw[dbdown] (bufpin) -- (unpin);
   \end{tikzpicture}}
   \caption{pin/unpin 调用链图}
@@ -133,18 +159,23 @@
 
 \begin{figure}[htbp]
   \centering
-  \resizebox{0.9\textwidth}{!}{%
-  \begin{tikzpicture}[node distance=8mm and 12mm]
-    \node[dbnode] (modify) {PageSetInt/String\\修改 page};
-    \node[dbnode, right=of modify] (mark) {BufferSetModified\\txNum, lsn};
-    \node[dbnode, right=of mark] (flushall) {BufferManagerFlushAll(tx)};
+  \resizebox{0.68\textwidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=10mm and 18mm,
+    every node/.style={align=center}
+  ]
+    \node[dblevel] (modify) {PageSetInt/String\\修改 page};
+    \node[dbnode, below=of modify] (mark) {BufferSetModified\\txNum, lsn};
+    \node[dbnode, below=of mark] (flushall) {BufferManagerFlushAll(tx)};
     \node[dbnode, below=of flushall] (flush) {BufferFlush};
-    \node[dbnode, left=of flush] (log) {LogManagerFlushLSN\\如果 lsn >= 0};
-    \node[dbnode, right=of flush] (file) {FileManagerWrite\\写回 block};
 
-    \draw[dbarrow] (modify) -- (mark);
-    \draw[dbarrow] (mark) -- (flushall);
+    \node[dbsubnode, below left=of flush, xshift=-6mm] (log) {LogManagerFlushLSN\\若 lsn >= 0};
+    \node[dbsubnode, below right=of flush, xshift=6mm] (file) {FileManagerWrite\\写回 block};
+
+    \draw[dbdown] (modify) -- (mark);
+    \draw[dbdown] (mark) -- (flushall);
     \draw[dbdown] (flushall) -- (flush);
+
     \draw[dbarrow] (flush) -- (log);
     \draw[dbarrow] (flush) -- (file);
   \end{tikzpicture}}
@@ -266,7 +297,7 @@ void BufferFlush(Buffer *buffer) {
 \section{运行与观察}
 \label{sec:buffer-run}
 
-在 \codepath{D:\textbackslash code\textbackslash DBMS\textbackslash NewDBMS\textbackslash DBMS_C} 下使用固定命令构建和测试：
+进入项目根目录后，使用固定命令构建和测试：
 
 \begin{dbcode}[listing options={language=bash}]{构建并运行 Buffer 相关测试}
 cmake -S . -B build

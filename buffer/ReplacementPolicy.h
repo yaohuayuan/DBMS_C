@@ -2,7 +2,7 @@
 #define DBMS_REPLACEMENT_POLICY_H
 
 typedef struct ReplacementPolicy {
-    void* impl;                               ///< 具体替换策略的实现指针
+    void* impl; ///< 具体替换策略的实现指针
 
     /**
      * 记录对指定帧的访问。

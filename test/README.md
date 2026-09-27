@@ -27,7 +27,7 @@
   - **RecordTest.c**: 记录操作的测试
 - **tx/**: 事务管理相关的测试用例
   - **LockTest.c**: 锁机制的测试
-  - **TranstionTest.c**: 事务处理的测试
+  - **TransactionTest.c**: 事务处理的测试
 - **Test.c**: 主测试入口
 - **test_bench_tps.c**: TPS性能基准测试
 

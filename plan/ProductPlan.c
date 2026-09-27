@@ -3,6 +3,8 @@
 //
 
 #include "ProductPlan.h"
+#include "Plan.h"
+#include "Schema.h"
 #include "ProductScan.h"
 ProductPlan *ProductPlanInit(Plan*plan1,Plan*plan2){
     ProductPlan *productPlan = malloc(sizeof(ProductPlan));

@@ -2,19 +2,19 @@
 #ifndef DBMS_C_SCHEMA_H
 #define DBMS_C_SCHEMA_H
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "CString.h"
 #include "map.h"
 #include <stdbool.h>
 
-#include "List.h"
+#include "CList.h"
 /**
  * @brief FileInfoCode 枚举，定义了各种文件信息类型。
  */
 typedef enum {
-    FILE_INFO_CODE_BIT,              ///< 位类型
+    FILE_INFO_CODE_BIT, ///< 位类型
     FILE_INFO_CODE_TINYINT,          ///< 微型整数类型
     FILE_INFO_CODE_SMALLINT,         ///< 小型整数类型
     FILE_INFO_CODE_INTEGER,          ///< 整数类型
@@ -22,11 +22,11 @@ typedef enum {
     FILE_INFO_CODE_FLOAT,            ///< 单精度浮点数类型
     FILE_INFO_CODE_REAL,             ///< 实数类型
     FILE_INFO_CODE_DOUBLE,           ///< 双精度浮点数类型
-    FILE_INFO_CODE_NUMERIC,          ///< 数值类型
+    FILE_INFO_CODE_NUMERIC, ///< 数值类型
     FILE_INFO_CODE_DECIMAL,          ///< 十进制类型
     FILE_INFO_CODE_CHAR,             ///< 定长字符类型
     FILE_INFO_CODE_VARCHAR,          ///< 变长字符类型
-    FILE_INFO_CODE_LONG_VARCHAR,     ///< 长变长字符类型
+    FILE_INFO_CODE_LONG_VARCHAR, ///< 长变长字符类型
     FILE_INFO_CODE_DATE,             ///< 日期类型
     FILE_INFO_CODE_TIME,             ///< 时间类型
     FILE_INFO_CODE_TIMESTAMP,        ///< 时间戳类型
@@ -39,7 +39,7 @@ typedef enum {
  * @brief FileInfo 结构体，用于表示文件信息，包含类型和长度。
  */
 typedef struct FileInfo {
-    int type;   ///< 文件类型，对应 FileInfoCode 枚举
+    int type; ///< 文件类型，对应 FileInfoCode 枚举
     int length; ///< 文件长度
 } FileInfo;
 
@@ -52,7 +52,7 @@ typedef map_t(FileInfo) map_FileInfo_t;
  * @brief FieldNode 结构体，用于表示字段节点，包含字段名、类型、长度和下一个节点指针。
  */
 typedef struct FieldNode {
-    CString *fileName;       ///< 字段名
+    CString *fileName; ///< 字段名
     int type;             ///< 字段类型
     int length;           ///< 字段长度
     struct FieldNode *next; ///< 下一个字段节点指针
@@ -159,5 +159,5 @@ void SchemaAddAll(Schema *SchemaTo, Schema *SchemaFrom);
  * @return 如果包含该字段，返回 true；否则返回 false。
  */
 bool SchemaHasField(Schema *schema, CString *FldName);
-List* SchemaGetAllFields(Schema *schema) ;
+CList* SchemaGetAllFields(Schema *schema) ;
 #endif //DBMS_C_SCHEMA_H

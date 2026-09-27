@@ -17,7 +17,7 @@ ProductScan *ProductScanInit(Scan*s1,Scan*s2);
 void ProductScanBeforeFirst(void*Scan);
 bool ProductScanNext(void*Scan);
 int ProductScanGetInt(void *scan,CString *fldname);
-char * ProductScanGetString(void *scan,CString *fldname);
+const char * ProductScanGetString(void *scan,CString *fldname);
 Constant * ProductScanGetVal(void *scan,CString *fldname);
 bool ProductScanHasField(void *scan,CString *fldname);
 void ProductScanClose(void *scan);

@@ -13,7 +13,7 @@
  * 通用的动态数组结构，支持任意类型。
  */
 typedef struct CVector {
-    void* data;             // 元素存储区
+    void* data; // 元素存储区
     size_t size;            // 当前元素个数
     size_t capacity;        // 当前容量（元素个数）
     size_t elem_size;       // 每个元素的大小（单位：字节）

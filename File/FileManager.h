@@ -1,28 +1,26 @@
-//
-// Created by Lenovo on 2025/6/23.
-//
-
 #ifndef NEWDBMS_FILEMANAGER_H
 #define NEWDBMS_FILEMANAGER_H
-#include "BlockId.h"
-#include "Page.h"
+
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <stdbool.h>
-#include <malloc.h>
 #include <unistd.h>
+#include "BlockId.h"
 #include "CMap.h"
+#include "Page.h"
 #include "rwlock.h"
-typedef struct FileManager{
+
+typedef struct FileManager {
     CString* dbDirectoryName; // 数据库目录名称。
-    DIR *dbDirectory;      // 数据库目录的句柄。
-    int blockSize;         // 文件系统的块大小。
-    bool isNew;            // 标记数据库是否为新创建。
+    DIR *dbDirectory; // 数据库目录的句柄。
+    int blockSize; // 文件系统的块大小。
+    bool isNew; // 标记数据库是否为新创建。
     CMap cMap;
 //    RWLock *rwLock;
-}FileManager;
+} FileManager;
+
 /**
  * 初始化一个新的 FileManager 实例。
  *
@@ -83,4 +81,5 @@ BlockID* FileManagerAppend(FileManager *fm, CString *filename);
  * @return 返回对应的文件指针。
  */
 FILE* FileManagerGetFile(FileManager *fm, CString *cs);
-#endif //NEWDBMS_FILEMANAGER_H
+
+#endif // NEWDBMS_FILEMANAGER_H

@@ -45,7 +45,7 @@ Trace 是 CLI 文本过程可视化，不是图形界面。它默认关闭，只
 Trace 可以在启动时开启，也可以在 CLI 运行过程中切换。启动时开启使用：
 
 \begin{dbcode}[listing options={language=bash}]{启动时开启 Trace}
-bin\NewDBMS.exe --trace
+./bin/NewDBMS.exe --trace
 \end{dbcode}
 
 进入 SQL 提示符后，可以使用以下元命令：
@@ -181,8 +181,7 @@ SELECT id, name FROM student_trace_demo WHERE id = 1;
 本章不运行自动测试，而是采用人工验证。进入项目目录后启动程序：
 
 \begin{dbcode}[listing options={language=bash}]{启动 Trace 演示}
-cd D:\code\DBMS\NewDBMS\DBMS_C
-.\bin\NewDBMS.exe --trace
+./bin/NewDBMS.exe --trace
 \end{dbcode}
 
 然后在 SQL 提示符中输入以下命令：
@@ -288,7 +287,7 @@ int BasicUpdatePlannerExecuteInsert(BasicUpdatePlanner *planner,
                                     InsertData *data,
                                     Transaction*transaction){
     UpdateExecutionTraceInsert(data);
-    /* 后续打开 TablePlan / Scan 并插入记录 */
+    /* 接着打开 TablePlan / Scan 并插入记录 */
 }
 
 void TransactionCommit(Transaction*transaction){

@@ -99,7 +99,7 @@ Layout *TableManagerGetLayout(TableManager *tableManager,CString *tblname,Transa
     TableScan *tableScan = TableScanInit(transaction,tblcatParam,tableManager->tableCatalogLayout);
     Scan*scan = ScanInit(tableScan,SCAN_TABLE_CODE);
     while (TableScanNext(scan)){
-        char *currentTblnameStr = TableScanGetString(scan,tblnameParam);
+        const char *currentTblnameStr = TableScanGetString(scan,tblnameParam);
         CString *currentTblname = CStringCreateFromCStr(currentTblnameStr);
         if(CStringEqual(currentTblname,tblname)){
             size = TableScanGetInt(scan,slotsizeParam);
@@ -117,10 +117,10 @@ Layout *TableManagerGetLayout(TableManager *tableManager,CString *tblname,Transa
     Scan *fieldCatalog = ScanInit(field,SCAN_TABLE_CODE);
 
     while(TableScanNext(fieldCatalog)){
-        char *currentTblnameStr = TableScanGetString(fieldCatalog,tblnameParam);
+        const char *currentTblnameStr = TableScanGetString(fieldCatalog,tblnameParam);
         CString *currentTblname = CStringCreateFromCStr(currentTblnameStr);
         if(CStringEqual(currentTblname,tblname)){
-            char *fldnameStr = TableScanGetString(fieldCatalog,fldnameParam);
+            const char *fldnameStr = TableScanGetString(fieldCatalog,fldnameParam);
             CString *fldname = CStringCreateFromCStr(fldnameStr);
             int fldtype = TableScanGetInt(fieldCatalog,typeParam);
             int fldlen = TableScanGetInt(fieldCatalog,lengthParam);
