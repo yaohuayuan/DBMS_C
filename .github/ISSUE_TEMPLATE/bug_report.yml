@@ -1,0 +1,39 @@
+name: Bug 报告
+description: 报告构建失败、测试失败或运行期错误
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。DBMS_C 是教学型原型,请先确认问题可在最新 main 分支复现。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请给出具体 SQL 语句或构建命令
+      placeholder: |
+        1. cmake -S . -B build
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 请粘贴完整报错或异常输出
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: 操作系统 / GCC 版本 / CMake 版本
+      placeholder: Windows 11, GCC 15.2.0 (MinGW-w64), CMake 3.28
+    validations:
+      required: true

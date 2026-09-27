@@ -1,92 +1,32 @@
-name: DBMS CI/CD
+name: CI
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
 jobs:
-  build-and-test-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install CMake
-        run: sudo apt-get update && sudo apt-get install -y cmake
-        shell: bash
-
-      - name: Configure CMake
-        run: cmake -B build -S .
-        shell: bash
-
-      - name: Build
-        run: cmake --build build --config Release
-        shell: bash
-
-      - name: Run Tests
-        run: |
-          cd build
-          ctest --output-on-failure
-        shell: bash
-
   build-and-test-windows:
+    # 项目当前仅支持 Windows/MinGW(见 README 已知限制),Linux 移植在 Roadmap 中
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install CMake
-        run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+      - name: Install MinGW-w64 and CMake
+        run: choco install mingw cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
         shell: pwsh
 
-      - name: Configure CMake
-        run: cmake -B build -S .
+      - name: Configure
+        run: cmake -G "MinGW Makefiles" -B build -S .
         shell: pwsh
 
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build -j4
         shell: pwsh
 
       - name: Run Tests
-        run: |
-          cd build
-          ctest --output-on-failure
+        run: ctest --test-dir build --output-on-failure
         shell: pwsh
-
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build-and-test-linux, build-and-test-windows]
-    if: success() && github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install CMake
-        run: sudo apt-get update && sudo apt-get install -y cmake
-
-      - name: Configure CMake
-        run: cmake -B build -S .
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Package executable
-        id: package
-        run: |
-          mkdir -p release
-          cp build/DBMS release/DBMS-Linux
-          echo "EXECUTABLE_PATH=release/DBMS-Linux" >> $GITHUB_ENV
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
-          body: "Automated build from GitHub Actions"
-          files: ${{ env.EXECUTABLE_PATH }}

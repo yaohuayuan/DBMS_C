@@ -12,9 +12,6 @@ RecordPage * RecordPageInit(Transaction*transaction,BlockID *blockId,Layout*layo
     return recordPage;
 }
 int RecordPageOffset(RecordPage *recordPage,int slot){
-    int offset = slot * recordPage->layout->SlotSize;
-//    printf("DEBUG: RecordPageOffset - slot %d, SlotSize %d, offset %d\n",
-//           slot, recordPage->layout->SlotSize, offset);
     return slot*recordPage->layout->SlotSize;
 
 }
@@ -64,7 +61,6 @@ void RecordPageFormat(RecordPage *recordPage){
         Schema *schema = recordPage->layout->schema;
         FieldNode*fieldNode = schema->fields;
         while (fieldNode!=NULL){
-            int offset = RecordPageOffset(recordPage, slot);
             CString *fldName = fieldNode->fileName;
             int fldPos = RecordPageOffset(recordPage,slot)+ LayoutOffset(recordPage->layout,fldName);
             if(SchemaType(schema,fldName)==FILE_INFO_CODE_INTEGER){
